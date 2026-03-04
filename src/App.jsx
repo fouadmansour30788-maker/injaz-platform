@@ -772,7 +772,7 @@ function Shell({ navItems, userLabel, userSub, accentColor = "#2E86DE", children
           ))}
         </nav>
 
-        <button className="sidebar-item" onClick={async () => { await supabase.auth.signOut(); }}
+        <button className="sidebar-item" onClick={async () => { await supabase.auth.signOut(); window.location.href = '/'; }}
           style={{ color: "#E74C3C", marginTop: 8 }}>
           <span>🚪</span> Sign Out
         </button>
