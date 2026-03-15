@@ -12,6 +12,7 @@
 
 import { useState, useEffect, useRef, createContext, useContext } from "react";
 import { createClient } from "@supabase/supabase-js";
+import { SpeedInsights } from "@vercel/speed-insights/react";
 
 // ─── Supabase client (reads from env vars) ───────────────────────
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
@@ -586,6 +587,7 @@ export default function App() {
       {!session && <AuthScreen />}
       {session && role === "seeker" && <SeekerShell />}
       {session && role === "employer" && <EmployerShell />}
+      <SpeedInsights />
     </AuthContext.Provider>
   );
 }
