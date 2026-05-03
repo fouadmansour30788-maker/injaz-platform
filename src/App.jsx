@@ -655,6 +655,16 @@ const db = {
     }).eq("id", seekerId);
     if (error) throw error;
   },
+  async getTrainerProfile(uid) {
+    const { data } = await supabase.from("trainers").select("*").eq("user_id", uid).single();
+    return data;
+  },
+  async updateTrainerProfile(id, updates) {
+    const { error } = await supabase.from("trainers")
+      .update({ ...updates, updated_at: new Date().toISOString() })
+      .eq("id", id);
+    if (error) throw error;
+  },
 };
 
 // ── AI layer ──────────────────────────────────────────────────
@@ -1136,7 +1146,7 @@ function SeekerProfile() {
   const [form, setForm] = useState({
     full_name: "", phone: "", governorate: "", nationality: "Lebanese",
     employment_status: "seeking", education_level: "bachelor", years_experience: 0,
-    field_of_study: "", university: "", sector: "", linkedin_url: ""
+    field_of_study: "", university: "", sector: "", linkedin_url: "", instagram_url: ""
   });
   const [skills, setSkills] = useState([]);
   const [newSkill, setNewSkill] = useState("");
@@ -1147,7 +1157,7 @@ function SeekerProfile() {
 
   useEffect(() => {
     if (profile) {
-      setForm({ full_name: profile.full_name || "", phone: profile.phone || "", governorate: profile.governorate || "", nationality: profile.nationality || "Lebanese", employment_status: profile.employment_status || "seeking", education_level: profile.education_level || "bachelor", years_experience: profile.years_experience || 0, field_of_study: profile.field_of_study || "", university: profile.university || "", sector: profile.sector || "", linkedin_url: profile.linkedin_url || "" });
+      setForm({ full_name: profile.full_name || "", phone: profile.phone || "", governorate: profile.governorate || "", nationality: profile.nationality || "Lebanese", employment_status: profile.employment_status || "seeking", education_level: profile.education_level || "bachelor", years_experience: profile.years_experience || 0, field_of_study: profile.field_of_study || "", university: profile.university || "", sector: profile.sector || "", linkedin_url: profile.linkedin_url || "", instagram_url: profile.instagram_url || "" });
       db.getSeekerSkills(profile.id).then(setSkills).catch(() => {});
     }
   }, [profile?.id]);
@@ -1256,6 +1266,7 @@ function SeekerProfile() {
             </select>
           </div>
           <div><Label>LinkedIn URL</Label><input className="input-field" value={form.linkedin_url} onChange={e => setForm(f => ({ ...f, linkedin_url: e.target.value }))} placeholder="https://linkedin.com/in/..." /></div>
+          <div><Label>Instagram URL</Label><input className="input-field" value={form.instagram_url} onChange={e => setForm(f => ({ ...f, instagram_url: e.target.value }))} placeholder="https://instagram.com/username" /></div>
         </div>
       </div>
 
@@ -2334,7 +2345,7 @@ function TrainerProfile() {
   const [form, setForm] = useState({
     full_name: "", phone: "", governorate: "", trainer_type: "trainer",
     org_name: "", sector: "", years_experience: 0, bio: "",
-    expertise_areas: [], linkedin_url: "", education_level: "bachelor",
+    expertise_areas: [], linkedin_url: "", instagram_url: "", education_level: "bachelor",
     languages_spoken: [], certifications: ""
   });
   const [newExpertise, setNewExpertise] = useState("");
@@ -2356,6 +2367,7 @@ function TrainerProfile() {
         bio: profile.bio || "",
         expertise_areas: profile.expertise_areas || [],
         linkedin_url: profile.linkedin_url || "",
+        instagram_url: profile.instagram_url || "",
         education_level: profile.education_level || "bachelor",
         languages_spoken: profile.languages_spoken || [],
         certifications: profile.certifications || "",
@@ -2468,7 +2480,8 @@ function TrainerProfile() {
               {[["bachelor", "Bachelor's"], ["master", "Master's"], ["phd", "PhD"], ["other", "Other"]].map(([v, l]) => <option key={v} value={v}>{l}</option>)}
             </select>
           </div>
-          <div style={{ gridColumn: "1 / -1" }}><Label>LinkedIn URL</Label><input className="input-field" value={form.linkedin_url} onChange={e => setForm(f => ({ ...f, linkedin_url: e.target.value }))} placeholder="https://linkedin.com/in/..." /></div>
+          <div><Label>LinkedIn URL</Label><input className="input-field" value={form.linkedin_url} onChange={e => setForm(f => ({ ...f, linkedin_url: e.target.value }))} placeholder="https://linkedin.com/in/..." /></div>
+          <div><Label>Instagram URL</Label><input className="input-field" value={form.instagram_url} onChange={e => setForm(f => ({ ...f, instagram_url: e.target.value }))} placeholder="https://instagram.com/username" /></div>
         </div>
       </div>
 
@@ -3585,6 +3598,7 @@ function InjazSeekers() {
                           <div>
                             <div style={{ fontWeight: 600, color: "#F0EBE0" }}>{s.full_name || "—"}</div>
                             {s.linkedin_url && <div style={{ fontSize: 10, color: "#C9A84C" }}>◈ LinkedIn</div>}
+                            {s.instagram_url && <div style={{ fontSize: 10, color: "#E1306C" }}>◈ Instagram</div>}
                           </div>
                         </div>
                       </td>
@@ -3838,7 +3852,10 @@ function InjazTrainersOverview() {
                   <div style={{ fontWeight: 700, fontSize: 15, color: "#F0EBE0" }}>{t.full_name || "—"}</div>
                   <span style={{ fontSize: 11, background: "rgba(201,168,76,0.1)", color: "#C9A84C", border: "1px solid rgba(201,168,76,0.2)", borderRadius: 20, padding: "2px 10px", textTransform: "capitalize" }}>{t.trainer_type || "trainer"}</span>
                 </div>
-                <div style={{ fontSize: 13, color: "#8A9BB5", marginBottom: 6 }}>{t.org_name || "—"} · {t.governorate || "—"} · {t.sector || "—"}</div>
+                <div style={{ fontSize: 13, color: "#8A9BB5", marginBottom: 6 }}>{t.org_name || "—"} · {t.governorate || "—"} · {t.sector || "—"}
+                  {t.linkedin_url && <span style={{ marginLeft: 8, fontSize: 11, color: "#C9A84C" }}>◈ LinkedIn</span>}
+                  {t.instagram_url && <span style={{ marginLeft: 8, fontSize: 11, color: "#E1306C" }}>◈ Instagram</span>}
+                </div>
                 {t.expertise_areas?.length > 0 && (
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                     {t.expertise_areas.slice(0, 4).map(e => (
