@@ -6336,279 +6336,7 @@ function InviteManagement() {
   );
 }
 
-export default function App() {
-  const [session, setSession] = useState(undefined);
-  const [profile, setProfile] = useState(null);
-  const [role, setRole] = useState(null);
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [activePage, setActivePage] = useState("dashboard");
-  const { toast, showSuccess, showError, showInfo } = useToast();
-
-  if (!supabase) return <SetupError />;
-
-  const loadProfile = async (user) => {
-    const userRole = user.user_metadata?.role;
-    const email = user.email || "";
-    const adminStatus = ADMIN_EMAILS.includes(email.toLowerCase());
-    setRole(userRole);
-    setIsAdmin(adminStatus);
-
-    try {
-      if (userRole === "seeker") {
-        let p = null;
-        try { p = await db.getSeekerProfile(user.id); } catch (_) {}
-        if (!p) {
-          const meta = user.user_metadata || {};
-          await supabase.from("job_seekers").insert({
-            user_id: user.id, full_name: meta.full_name || "",
-            governorate: meta.governorate || null, sector: meta.sector || null,
-            nationality: "Lebanese", profile_score: 20,
-          }).single();
-          p = await db.getSeekerProfile(user.id).catch(() => null);
-        }
-        setProfile(p);
-      } else if (userRole === "employer") {
-        let p = null;
-        try { p = await db.getEmployerProfile(user.id); } catch (_) {}
-        if (!p) {
-          const meta = user.user_metadata || {};
-          await supabase.from("employers").insert({
-            user_id: user.id, org_name: meta.org_name || meta.full_name || "My Organization",
-            contact_person: meta.full_name || "", governorate: meta.governorate || null, sector: meta.sector || null,
-          }).single();
-          p = await db.getEmployerProfile(user.id).catch(() => null);
-        }
-        setProfile(p);
-      } else if (userRole === "trainer") {
-        let p = null;
-        try { p = await db.getTrainerProfile(user.id); } catch (_) {}
-        if (!p) {
-          const meta = user.user_metadata || {};
-          await supabase.from("trainers").insert({
-            user_id: user.id,
-            full_name: meta.full_name || "",
-            trainer_type: meta.trainer_type || "trainer",
-            org_name: meta.org_name || "",
-            governorate: meta.governorate || null,
-            sector: meta.sector || null,
-            profile_score: 20,
-          }).single();
-          p = await db.getTrainerProfile(user.id).catch(() => null);
-        }
-        setProfile(p);
-      } else if (userRole === "injaz_team") {
-        let p = null;
-        try { p = await db.getInjazTeamProfile(user.id); } catch (_) {}
-        if (!p) {
-          const meta = user.user_metadata || {};
-          await supabase.from("injaz_team").insert({
-            user_id: user.id,
-            full_name: meta.full_name || "",
-            injaz_role: meta.injaz_role || "program_officer",
-            governorate: meta.governorate || null,
-            profile_score: 20,
-          }).single();
-          p = await db.getInjazTeamProfile(user.id).catch(() => null);
-        }
-        setProfile(p);
-      }
-    } catch (e) { console.error("loadProfile error:", e); }
-  };
-
-  useEffect(() => {
-    db.getSession().then(async (sess) => {
-      setSession(sess);
-      if (sess) await loadProfile(sess.user);
-    });
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, sess) => {
-      setSession(sess);
-      if (sess) await loadProfile(sess.user);
-      else { setProfile(null); setRole(null); setIsAdmin(false); }
-    });
-    return () => subscription.unsubscribe();
-  }, []);
-
-  // Loading
-  if (session === undefined) return (
-    <div style={{ minHeight: "100vh", background: "#080F1E", display: "flex", alignItems: "center", justifyContent: "center" }}>
-      <style>{globalStyles}</style>
-      <div style={{ textAlign: "center" }}>
-        <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 32, fontWeight: 700, color: "#C9A84C", marginBottom: 8 }}>INJAZ</div>
-        <Spinner size={32} />
-      </div>
-    </div>
-  );
-
-  if (!session) return <AuthCtx.Provider value={{ session, profile, setProfile, role, isAdmin, showSuccess, showError, showInfo }}><style>{globalStyles}</style><AuthScreen /><Toast toast={toast} /></AuthCtx.Provider>;
-
-  // Seeker shell
-  if (role === "seeker") {
-    const navItems = [
-      { id: "dashboard", icon: "⊞", label: "Dashboard" },
-      { id: "profile", icon: "◎", label: "My Profile" },
-      { id: "matches", icon: "◈", label: "Job Matches" },
-      { id: "coverletter", icon: "⊡", label: "Cover Letter AI" },
-      { id: "interview", icon: "◉", label: "Interview Coach" },
-      { id: "journey", icon: "◐", label: "My Journey" },
-      { id: "applications", icon: "≡", label: "Applications" },
-      { id: "insights", icon: "◑", label: "Market Insights" },
-      { id: "checkpoints", icon: "◉", label: "My Checkpoints" },
-      { id: "attendance", icon: "≡", label: "My Attendance" },
-      { id: "announcements", icon: "◆", label: "Announcements" },
-      { id: "announcements", icon: "◆", label: "Announcements" },
-      { id: "assessments", icon: "◈", label: "Assessments" },
-      ...(isAdmin ? [{ id: "admin", icon: "✦", label: "Admin Panel" }, { id: "admin-journey", icon: "⊕", label: "Journey Overview" }] : []),
-    ];
-    const pages = {
-      dashboard: <SeekerDashboard setActivePage={setActivePage} />,
-      profile: <SeekerProfile />,
-      matches: <JobMatches />,
-      coverletter: <CoverLetterAI />,
-      interview: <InterviewCoach />,
-      journey: <JourneyTracker />,
-      applications: <MyApplications />,
-      insights: <MarketInsights />,
-      checkpoints: <MyCheckpoints />,
-      attendance: <MyAttendance />,
-      announcements: <ParticipantAnnouncements />,
-      assessments: <MyAssessments />,
-      admin: <AdminDashboard />,
-      "admin-journey": <AdminJourneyOverview />,
-    };
-    return (
-      <AuthCtx.Provider value={{ session, profile, setProfile, role, isAdmin, showSuccess, showError, showInfo }}>
-        <Shell navItems={navItems} userLabel={profile?.full_name || "Participant"} userSub={isAdmin ? "Admin Access" : `Profile ${profile?.profile_score || 20}% complete`} activePage={activePage} setActivePage={setActivePage}>
-          {pages[activePage] || pages.dashboard}
-        </Shell>
-        <Toast toast={toast} />
-      </AuthCtx.Provider>
-    );
-  }
-
-  // Employer shell
-  if (role === "employer") {
-    const navItems = [
-      { id: "dashboard", icon: "⊞", label: "Dashboard" },
-      { id: "post-job", icon: "⊕", label: "Post a Job" },
-      { id: "postings", icon: "≡", label: "My Postings" },
-      ...(isAdmin ? [{ id: "admin", icon: "✦", label: "Admin Panel" }, { id: "admin-journey", icon: "⊕", label: "Journey Overview" }] : []),
-    ];
-    const pages = {
-      dashboard: <EmployerDashboard setActivePage={setActivePage} />,
-      "post-job": <PostJob />,
-      postings: <MyPostings />,
-      admin: <AdminDashboard />,
-      "admin-journey": <AdminJourneyOverview />,
-    };
-    return (
-      <AuthCtx.Provider value={{ session, profile, setProfile, role, isAdmin, showSuccess, showError, showInfo }}>
-        <Shell navItems={navItems} userLabel={profile?.org_name || "Employer"} userSub={profile?.contact_person || "Employer Account"} accentColor={C.accent} activePage={activePage} setActivePage={setActivePage}>
-          {pages[activePage] || pages.dashboard}
-        </Shell>
-        <Toast toast={toast} />
-      </AuthCtx.Provider>
-    );
-  }
-
-  // Trainer/Mentor shell
-  if (role === "trainer") {
-    const trainerNav = [
-      { id: "dashboard", icon: "⊞", label: "Dashboard" },
-      { id: "profile", icon: "◎", label: "My Profile" },
-      { id: "participants", icon: "◈", label: "Participants" },
-      { id: "journey-overview", icon: "◐", label: "Journey Overview" },
-      { id: "checkpoints", icon: "◉", label: "Intersection Checkpoints" },
-      { id: "attendance", icon: "≡", label: "Attendance" },
-      { id: "announcements", icon: "◆", label: "Announcements" },
-      { id: "assessments", icon: "◈", label: "Assessments" },
-      ...(isAdmin ? [{ id: "admin", icon: "✦", label: "Admin Panel" }] : []),
-    ];
-    const trainerPages = {
-      dashboard: <TrainerDashboard setActivePage={setActivePage} />,
-      profile: <TrainerProfile />,
-      participants: <TrainerParticipants />,
-      "journey-overview": <TrainerJourneyOverview />,
-      checkpoints: <CheckpointManager />,
-      attendance: <AttendanceVerification />,
-      announcements: <ComposeAnnouncements senderRole="trainer" />,
-      assessments: <TrainerAssessments />,
-      admin: <AdminDashboard />,
-    };
-    const trainerType = profile?.trainer_type || "trainer";
-    const typeLabel = trainerType === "mentor" ? "Mentor" : trainerType === "both" ? "Trainer & Mentor" : "Trainer";
-    return (
-      <AuthCtx.Provider value={{ session, profile, setProfile, role, isAdmin, showSuccess, showError, showInfo }}>
-        <Shell navItems={trainerNav} userLabel={profile?.full_name || typeLabel} userSub={`${typeLabel} · ${profile?.org_name || "INJAZ Lebanon"}`} activePage={activePage} setActivePage={setActivePage}>
-          {trainerPages[activePage] || trainerPages.dashboard}
-        </Shell>
-        <Toast toast={toast} />
-      </AuthCtx.Provider>
-    );
-  }
-
-  // INJAZ Team shell
-  if (role === "injaz_team") {
-    const injazNav = [
-      { id: "dashboard", icon: "⊞", label: "Dashboard" },
-      { id: "seekers", icon: "◈", label: "Participants" },
-      { id: "employers", icon: "◆", label: "Employers & Jobs" },
-      { id: "journey", icon: "◐", label: "Journey Tracking" },
-      { id: "trainers-overview", icon: "◉", label: "Trainers & Mentors" },
-      { id: "reports", icon: "≡", label: "Reports & Export" },
-      { id: "checkpoints", icon: "◉", label: "Intersection Checkpoints" },
-      { id: "attendance", icon: "≡", label: "Attendance" },
-      { id: "announcements", icon: "◆", label: "Announcements" },
-      { id: "assessments", icon: "◈", label: "Assessments" },
-      { id: "invites", icon: "⊕", label: "User Access" },
-      { id: "profile", icon: "◎", label: "My Profile" },
-    ];
-    const injazPages = {
-      dashboard: <InjazDashboard setActivePage={setActivePage} />,
-      seekers: <InjazSeekers />,
-      employers: <InjazEmployers />,
-      journey: <InjazJourneyTracking />,
-      "trainers-overview": <InjazTrainersOverview />,
-      reports: <InjazReports />,
-      checkpoints: <CheckpointManager isInjazTeam={true} />,
-      attendance: <AttendanceVerification isInjazTeam={true} />,
-      announcements: <ComposeAnnouncements senderRole="injaz" />,
-      assessments: <InjazAssessmentsView />,
-      invites: <InviteManagement />,
-      profile: <InjazProfile />,
-    };
-    const injazRole = (profile?.injaz_role || "program_officer").replace(/_/g, " ");
-    return (
-      <AuthCtx.Provider value={{ session, profile, setProfile, role, isAdmin, showSuccess, showError, showInfo }}>
-        <Shell navItems={injazNav} userLabel={profile?.full_name || "INJAZ Team"} userSub={`✦ ${injazRole}`} activePage={activePage} setActivePage={setActivePage}>
-          {injazPages[activePage] || injazPages.dashboard}
-        </Shell>
-        <Toast toast={toast} />
-      </AuthCtx.Provider>
-    );
-  }
-
-  // Unknown role fallback
-  return (
-    <div style={{ minHeight: "100vh", background: "#080F1E", display: "flex", alignItems: "center", justifyContent: "center" }}>
-      <style>{globalStyles}</style>
-      <div className="card" style={{ textAlign: "center", padding: 48 }}>
-        <div style={{ fontSize: 36, marginBottom: 16 }}>🔄</div>
-        <p style={{ color: "#8A9BB5", marginBottom: 20 }}>Setting up your account...</p>
-        <button className="btn-secondary" onClick={async () => {
-            // Clear all Supabase keys from localStorage
-            Object.keys(localStorage).forEach(key => {
-              if (key.startsWith('sb-') || key.includes('supabase')) localStorage.removeItem(key);
-            });
-            Object.keys(sessionStorage).forEach(key => {
-              if (key.startsWith('sb-') || key.includes('supabase')) sessionStorage.removeItem(key);
-            });
-            try { await supabase.auth.signOut({ scope: 'global' }); } catch(e) {}
-            window.location.href = window.location.origin;
-          }}>Sign Out & Try Again</button>
-      </div>
-    </div>
-  );
-}// ── PageHeader ────────────────────────────────────────────────
+// ── PageHeader ────────────────────────────────────────────────
 function PageHeader({ title, subtitle, action }) {
   return (
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 28 }}>
@@ -6768,3 +6496,277 @@ function AnnouncementPopupManager({ session, role, onNavigateToAnnouncements }) 
 }
 
 
+
+
+export default function App() {
+  const [session, setSession] = useState(undefined);
+  const [profile, setProfile] = useState(null);
+  const [role, setRole] = useState(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [activePage, setActivePage] = useState("dashboard");
+  const { toast, showSuccess, showError, showInfo } = useToast();
+
+  if (!supabase) return <SetupError />;
+
+  const loadProfile = async (user) => {
+    const userRole = user.user_metadata?.role;
+    const email = user.email || "";
+    const adminStatus = ADMIN_EMAILS.includes(email.toLowerCase());
+    setRole(userRole);
+    setIsAdmin(adminStatus);
+
+    try {
+      if (userRole === "seeker") {
+        let p = null;
+        try { p = await db.getSeekerProfile(user.id); } catch (_) {}
+        if (!p) {
+          const meta = user.user_metadata || {};
+          await supabase.from("job_seekers").insert({
+            user_id: user.id, full_name: meta.full_name || "",
+            governorate: meta.governorate || null, sector: meta.sector || null,
+            nationality: "Lebanese", profile_score: 20,
+          }).single();
+          p = await db.getSeekerProfile(user.id).catch(() => null);
+        }
+        setProfile(p);
+      } else if (userRole === "employer") {
+        let p = null;
+        try { p = await db.getEmployerProfile(user.id); } catch (_) {}
+        if (!p) {
+          const meta = user.user_metadata || {};
+          await supabase.from("employers").insert({
+            user_id: user.id, org_name: meta.org_name || meta.full_name || "My Organization",
+            contact_person: meta.full_name || "", governorate: meta.governorate || null, sector: meta.sector || null,
+          }).single();
+          p = await db.getEmployerProfile(user.id).catch(() => null);
+        }
+        setProfile(p);
+      } else if (userRole === "trainer") {
+        let p = null;
+        try { p = await db.getTrainerProfile(user.id); } catch (_) {}
+        if (!p) {
+          const meta = user.user_metadata || {};
+          await supabase.from("trainers").insert({
+            user_id: user.id,
+            full_name: meta.full_name || "",
+            trainer_type: meta.trainer_type || "trainer",
+            org_name: meta.org_name || "",
+            governorate: meta.governorate || null,
+            sector: meta.sector || null,
+            profile_score: 20,
+          }).single();
+          p = await db.getTrainerProfile(user.id).catch(() => null);
+        }
+        setProfile(p);
+      } else if (userRole === "injaz_team") {
+        let p = null;
+        try { p = await db.getInjazTeamProfile(user.id); } catch (_) {}
+        if (!p) {
+          const meta = user.user_metadata || {};
+          await supabase.from("injaz_team").insert({
+            user_id: user.id,
+            full_name: meta.full_name || "",
+            injaz_role: meta.injaz_role || "program_officer",
+            governorate: meta.governorate || null,
+            profile_score: 20,
+          }).single();
+          p = await db.getInjazTeamProfile(user.id).catch(() => null);
+        }
+        setProfile(p);
+      }
+    } catch (e) { console.error("loadProfile error:", e); }
+  };
+
+  useEffect(() => {
+    db.getSession().then(async (sess) => {
+      setSession(sess);
+      if (sess) await loadProfile(sess.user);
+    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, sess) => {
+      setSession(sess);
+      if (sess) await loadProfile(sess.user);
+      else { setProfile(null); setRole(null); setIsAdmin(false); }
+    });
+    return () => subscription.unsubscribe();
+  }, []);
+
+  // Loading
+  if (session === undefined) return (
+    <div style={{ minHeight: "100vh", background: "#080F1E", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <style>{globalStyles}</style>
+      <div style={{ textAlign: "center" }}>
+        <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 32, fontWeight: 700, color: "#C9A84C", marginBottom: 8 }}>INJAZ</div>
+        <Spinner size={32} />
+      </div>
+    </div>
+  );
+
+  if (!session) return <AuthCtx.Provider value={{ session, profile, setProfile, role, isAdmin, showSuccess, showError, showInfo }}><style>{globalStyles}</style><AuthScreen /><Toast toast={toast} /></AuthCtx.Provider>;
+
+  // Seeker shell
+  if (role === "seeker") {
+    const navItems = [
+      { id: "dashboard", icon: "⊞", label: "Dashboard" },
+      { id: "profile", icon: "◎", label: "My Profile" },
+      { id: "matches", icon: "◈", label: "Job Matches" },
+      { id: "coverletter", icon: "⊡", label: "Cover Letter AI" },
+      { id: "interview", icon: "◉", label: "Interview Coach" },
+      { id: "journey", icon: "◐", label: "My Journey" },
+      { id: "applications", icon: "≡", label: "Applications" },
+      { id: "insights", icon: "◑", label: "Market Insights" },
+      { id: "checkpoints", icon: "◉", label: "My Checkpoints" },
+      { id: "attendance", icon: "≡", label: "My Attendance" },
+      { id: "announcements", icon: "◆", label: "Announcements" },
+      { id: "assessments", icon: "◈", label: "Assessments" },
+      ...(isAdmin ? [{ id: "admin", icon: "✦", label: "Admin Panel" }, { id: "admin-journey", icon: "⊕", label: "Journey Overview" }] : []),
+    ];
+    const pages = {
+      dashboard: <SeekerDashboard setActivePage={setActivePage} />,
+      profile: <SeekerProfile />,
+      matches: <JobMatches />,
+      coverletter: <CoverLetterAI />,
+      interview: <InterviewCoach />,
+      journey: <JourneyTracker />,
+      applications: <MyApplications />,
+      insights: <MarketInsights />,
+      checkpoints: <MyCheckpoints />,
+      attendance: <MyAttendance />,
+      announcements: <ParticipantAnnouncements />,
+      assessments: <MyAssessments />,
+      admin: <AdminDashboard />,
+      "admin-journey": <AdminJourneyOverview />,
+    };
+    return (
+      <AuthCtx.Provider value={{ session, profile, setProfile, role, isAdmin, showSuccess, showError, showInfo }}>
+        <Shell navItems={navItems} userLabel={profile?.full_name || "Participant"} userSub={isAdmin ? "Admin Access" : `Profile ${profile?.profile_score || 20}% complete`} activePage={activePage} setActivePage={setActivePage}>
+          {pages[activePage] || pages.dashboard}
+        </Shell>
+        <Toast toast={toast} />
+      </AuthCtx.Provider>
+    );
+  }
+
+  // Employer shell
+  if (role === "employer") {
+    const navItems = [
+      { id: "dashboard", icon: "⊞", label: "Dashboard" },
+      { id: "post-job", icon: "⊕", label: "Post a Job" },
+      { id: "postings", icon: "≡", label: "My Postings" },
+      ...(isAdmin ? [{ id: "admin", icon: "✦", label: "Admin Panel" }, { id: "admin-journey", icon: "⊕", label: "Journey Overview" }] : []),
+    ];
+    const pages = {
+      dashboard: <EmployerDashboard setActivePage={setActivePage} />,
+      "post-job": <PostJob />,
+      postings: <MyPostings />,
+      admin: <AdminDashboard />,
+      "admin-journey": <AdminJourneyOverview />,
+    };
+    return (
+      <AuthCtx.Provider value={{ session, profile, setProfile, role, isAdmin, showSuccess, showError, showInfo }}>
+        <Shell navItems={navItems} userLabel={profile?.org_name || "Employer"} userSub={profile?.contact_person || "Employer Account"} accentColor={C.accent} activePage={activePage} setActivePage={setActivePage}>
+          {pages[activePage] || pages.dashboard}
+        </Shell>
+        <Toast toast={toast} />
+      </AuthCtx.Provider>
+    );
+  }
+
+  // Trainer/Mentor shell
+  if (role === "trainer") {
+    const trainerNav = [
+      { id: "dashboard", icon: "⊞", label: "Dashboard" },
+      { id: "profile", icon: "◎", label: "My Profile" },
+      { id: "participants", icon: "◈", label: "Participants" },
+      { id: "journey-overview", icon: "◐", label: "Journey Overview" },
+      { id: "checkpoints", icon: "◉", label: "Intersection Checkpoints" },
+      { id: "attendance", icon: "≡", label: "Attendance" },
+      { id: "announcements", icon: "◆", label: "Announcements" },
+      { id: "assessments", icon: "◈", label: "Assessments" },
+      ...(isAdmin ? [{ id: "admin", icon: "✦", label: "Admin Panel" }] : []),
+    ];
+    const trainerPages = {
+      dashboard: <TrainerDashboard setActivePage={setActivePage} />,
+      profile: <TrainerProfile />,
+      participants: <TrainerParticipants />,
+      "journey-overview": <TrainerJourneyOverview />,
+      checkpoints: <CheckpointManager />,
+      attendance: <AttendanceVerification />,
+      announcements: <ComposeAnnouncements senderRole="trainer" />,
+      assessments: <TrainerAssessments />,
+      admin: <AdminDashboard />,
+    };
+    const trainerType = profile?.trainer_type || "trainer";
+    const typeLabel = trainerType === "mentor" ? "Mentor" : trainerType === "both" ? "Trainer & Mentor" : "Trainer";
+    return (
+      <AuthCtx.Provider value={{ session, profile, setProfile, role, isAdmin, showSuccess, showError, showInfo }}>
+        <Shell navItems={trainerNav} userLabel={profile?.full_name || typeLabel} userSub={`${typeLabel} · ${profile?.org_name || "INJAZ Lebanon"}`} activePage={activePage} setActivePage={setActivePage}>
+          {trainerPages[activePage] || trainerPages.dashboard}
+        </Shell>
+        <Toast toast={toast} />
+      </AuthCtx.Provider>
+    );
+  }
+
+  // INJAZ Team shell
+  if (role === "injaz_team") {
+    const injazNav = [
+      { id: "dashboard", icon: "⊞", label: "Dashboard" },
+      { id: "seekers", icon: "◈", label: "Participants" },
+      { id: "employers", icon: "◆", label: "Employers & Jobs" },
+      { id: "journey", icon: "◐", label: "Journey Tracking" },
+      { id: "trainers-overview", icon: "◉", label: "Trainers & Mentors" },
+      { id: "reports", icon: "≡", label: "Reports & Export" },
+      { id: "checkpoints", icon: "◉", label: "Intersection Checkpoints" },
+      { id: "attendance", icon: "≡", label: "Attendance" },
+      { id: "announcements", icon: "◆", label: "Announcements" },
+      { id: "assessments", icon: "◈", label: "Assessments" },
+      { id: "invites", icon: "⊕", label: "User Access" },
+      { id: "profile", icon: "◎", label: "My Profile" },
+    ];
+    const injazPages = {
+      dashboard: <InjazDashboard setActivePage={setActivePage} />,
+      seekers: <InjazSeekers />,
+      employers: <InjazEmployers />,
+      journey: <InjazJourneyTracking />,
+      "trainers-overview": <InjazTrainersOverview />,
+      reports: <InjazReports />,
+      checkpoints: <CheckpointManager isInjazTeam={true} />,
+      attendance: <AttendanceVerification isInjazTeam={true} />,
+      announcements: <ComposeAnnouncements senderRole="injaz" />,
+      assessments: <InjazAssessmentsView />,
+      invites: <InviteManagement />,
+      profile: <InjazProfile />,
+    };
+    const injazRole = (profile?.injaz_role || "program_officer").replace(/_/g, " ");
+    return (
+      <AuthCtx.Provider value={{ session, profile, setProfile, role, isAdmin, showSuccess, showError, showInfo }}>
+        <Shell navItems={injazNav} userLabel={profile?.full_name || "INJAZ Team"} userSub={`✦ ${injazRole}`} activePage={activePage} setActivePage={setActivePage}>
+          {injazPages[activePage] || injazPages.dashboard}
+        </Shell>
+        <Toast toast={toast} />
+      </AuthCtx.Provider>
+    );
+  }
+
+  // Unknown role fallback
+  return (
+    <div style={{ minHeight: "100vh", background: "#080F1E", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <style>{globalStyles}</style>
+      <div className="card" style={{ textAlign: "center", padding: 48 }}>
+        <div style={{ fontSize: 36, marginBottom: 16 }}>🔄</div>
+        <p style={{ color: "#8A9BB5", marginBottom: 20 }}>Setting up your account...</p>
+        <button className="btn-secondary" onClick={async () => {
+            // Clear all Supabase keys from localStorage
+            Object.keys(localStorage).forEach(key => {
+              if (key.startsWith('sb-') || key.includes('supabase')) localStorage.removeItem(key);
+            });
+            Object.keys(sessionStorage).forEach(key => {
+              if (key.startsWith('sb-') || key.includes('supabase')) sessionStorage.removeItem(key);
+            });
+            try { await supabase.auth.signOut({ scope: 'global' }); } catch(e) {}
+            window.location.href = window.location.origin;
+          }}>Sign Out & Try Again</button>
+      </div>
+    </div>
+  );
+}
