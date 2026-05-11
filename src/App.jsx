@@ -328,9 +328,11 @@ const db = {
     return (data || []).map(s => s.skill_name);
   },
   async upsertSkills(seekerId, skills) {
-    await supabase.from("seeker_skills").delete().eq("seeker_id", seekerId);
+    const { error: delErr } = await supabase.from("seeker_skills").delete().eq("seeker_id", seekerId);
+    if (delErr) throw delErr;
     if (skills.length > 0) {
-      await supabase.from("seeker_skills").insert(skills.map(s => ({ seeker_id: seekerId, skill_name: s })));
+      const { error: insErr } = await supabase.from("seeker_skills").insert(skills.map(s => ({ seeker_id: seekerId, skill_name: s })));
+      if (insErr) throw insErr;
     }
   },
   async getActivePostings() {
@@ -420,6 +422,21 @@ const db = {
       .select("*, job_seekers(full_name, governorate, sector)").order("date", { ascending: false });
     return data || [];
   },
+  async saveAssessment(assessment) {
+    const { data, error } = await supabase.from("assessments").insert(assessment).select().single();
+    if (error) throw error;
+    return data;
+  },
+  async getMyAssessments(userId, role) {
+    const col = role === "trainer" ? "trainer_id" : "seeker_id";
+    const { data } = await supabase.from("assessments").select("*").eq(col, userId).order("created_at", { ascending: false });
+    return data || [];
+  },
+  async getAllAssessments() {
+    const { data } = await supabase.from("assessments")
+      .select("*, job_seekers(full_name), trainers(full_name)").order("created_at", { ascending: false });
+    return data || [];
+  },
   async checkAllowedEmail(email) {
     const { data } = await supabase.from("allowed_emails")
       .select("*").eq("email", email.toLowerCase().trim()).single();
@@ -474,6 +491,14 @@ const db = {
     const { error } = await supabase.from("announcements").delete().eq("id", id);
     if (error) throw error;
   },
+  async markAnnouncementRead(annId, userId) {
+    await supabase.from("announcement_reads").upsert({ announcement_id: annId, user_id: userId }, { onConflict: "announcement_id,user_id" });
+  },
+  async getReadAnnouncements(userId) {
+    const { data } = await supabase.from("announcement_reads").select("announcement_id").eq("user_id", userId);
+    return (data || []).map(r => r.announcement_id);
+  },
+
   async checkAllowedEmail(email) {
     const { data } = await supabase.from("allowed_emails")
       .select("*").eq("email", email.toLowerCase().trim()).single();
@@ -588,21 +613,6 @@ const db = {
   async getReadAnnouncements(userId) {
     const { data } = await supabase.from("announcement_reads").select("announcement_id").eq("user_id", userId);
     return (data || []).map(r => r.announcement_id);
-  },
-  async saveAssessment(assessment) {
-    const { data, error } = await supabase.from("assessments").insert(assessment).select().single();
-    if (error) throw error;
-    return data;
-  },
-  async getMyAssessments(userId, role) {
-    const col = role === "trainer" ? "trainer_id" : "seeker_id";
-    const { data } = await supabase.from("assessments").select("*").eq(col, userId).order("created_at", { ascending: false });
-    return data || [];
-  },
-  async getAllAssessments() {
-    const { data } = await supabase.from("assessments")
-      .select("*, job_seekers(full_name), trainers(full_name)").order("created_at", { ascending: false });
-    return data || [];
   },
   async getAllSeekerSkills() {
     const { data } = await supabase.from("seeker_skills").select("skill_name");
@@ -728,6 +738,147 @@ function StatCard({ label, value, icon, color, delay = 0 }) {
       <div style={{ fontSize: 12, color: "#8A9BB5", fontWeight: 500 }}>{label}</div>
     </div>
   );
+}
+
+// ── PageHeader ────────────────────────────────────────────────
+function PageHeader({ title, subtitle, action }) {
+  return (
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 28 }}>
+      <div>
+        <h1 style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 24, fontWeight: 700, color: "#F0EBE0", marginBottom: 4 }}>{title}</h1>
+        {subtitle && <p style={{ color: "#8A9BB5", fontSize: 14 }}>{subtitle}</p>}
+      </div>
+      {action && <div style={{ flexShrink: 0, marginLeft: 16 }}>{action}</div>}
+    </div>
+  );
+}
+
+// ── Shell ─────────────────────────────────────────────────────
+function Shell({ navItems, userLabel, userSub, accentColor = C.primary, children, activePage, setActivePage, session, role }) {
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  return (
+    <div style={{ display: "flex", minHeight: "100vh", background: "#080F1E" }}>
+      <style>{globalStyles}</style>
+      {sidebarOpen && <div className="mobile-overlay" onClick={() => setSidebarOpen(false)} />}
+      <div className={"sidebar" + (sidebarOpen ? " open" : "")} style={{ width: 230, flexShrink: 0, background: "rgba(10,18,32,0.97)", borderRight: "1px solid rgba(201,168,76,0.12)", display: "flex", flexDirection: "column", padding: "24px 12px", position: "sticky", top: 0, height: "100vh", overflowY: "auto", backdropFilter: "blur(20px)", zIndex: 40 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "0 6px", marginBottom: 28 }}>
+          <div style={{ width: 36, height: 36, borderRadius: 10, background: "rgba(201,168,76,0.15)", border: "1px solid rgba(201,168,76,0.3)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, color: accentColor, fontWeight: 700 }}>I</div>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "#F0EBE0", letterSpacing: 1 }}>INJAZ</div>
+            <div style={{ fontSize: 9, color: "#4A5A72", letterSpacing: 1.5, textTransform: "uppercase" }}>Career Platform</div>
+          </div>
+        </div>
+        <div style={{ padding: "10px", marginBottom: 20, background: "rgba(255,255,255,0.03)", borderRadius: 10, border: "1px solid rgba(255,255,255,0.06)" }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: "#F0EBE0", marginBottom: 2 }}>{userLabel}</div>
+          <div style={{ fontSize: 11, color: accentColor }}>{userSub}</div>
+        </div>
+        <nav style={{ flex: 1, display: "flex", flexDirection: "column", gap: 2 }}>
+          {navItems.map(item => (
+            <button key={item.id} className={"nav-item" + (activePage === item.id ? " active" : "")}
+              onClick={() => { setActivePage(item.id); setSidebarOpen(false); }}
+              style={{ fontFamily: "'DM Sans',sans-serif" }}>
+              <span className="nav-icon">{item.icon}</span>
+              <span style={{ flex: 1 }}>{item.label}</span>
+              {item.badge && (item.badgeType === "notif"
+                ? <span style={{ minWidth: 18, height: 18, borderRadius: 9, background: "#C8392B", color: "#fff", fontSize: 10, fontWeight: 800, display: "inline-flex", alignItems: "center", justifyContent: "center", padding: "0 4px" }}>{item.badge}</span>
+                : <span style={{ fontSize: 11, background: "rgba(201,168,76,0.2)", color: "#C9A84C", borderRadius: 10, padding: "1px 7px", fontWeight: 700, border: "1px solid rgba(201,168,76,0.3)" }}>{item.badge}</span>
+              )}
+            </button>
+          ))}
+        </nav>
+        <button className="nav-item" onClick={async () => {
+            try { await supabase.auth.signOut(); } catch (e) {}
+            window.location.href = window.location.origin;
+          }} style={{ marginTop: 12, color: "#C8392B", fontFamily: "'DM Sans',sans-serif" }}>
+          <span className="nav-icon">&#x2192;</span> Sign Out
+        </button>
+      </div>
+      <div style={{ flex: 1, overflowX: "hidden" }}>
+        <div style={{ maxWidth: 1100, margin: "0 auto", padding: "32px 28px" }}>
+          {children}
+        </div>
+      </div>
+      {session && role && role !== "injaz_team" && role !== "employer" && (
+        <AnnouncementPopupManager session={session} role={role} onNavigate={() => setActivePage("announcements")} />
+      )}
+    </div>
+  );
+}
+
+// ── Announcement popup ────────────────────────────────────────
+function useAnnouncementRealtime(session, role, onNew) {
+  useEffect(() => {
+    if (!supabase || !session?.user?.id || role === "injaz_team") return;
+    const ch = supabase.channel("ann-rt")
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "announcements" }, (payload) => {
+        const ann = payload.new;
+        const ok = ann.target_role === "all" ||
+          (role === "seeker" && (ann.target_role === "seeker" || ann.target_role === "all")) ||
+          (role === "trainer" && (ann.target_role === "trainer" || ann.target_role === "all"));
+        if (ok) onNew(ann);
+      }).subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [session?.user?.id, role]);
+}
+
+function AnnouncementPopup({ ann, onClose, onView }) {
+  const [hiding, setHiding] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => { setHiding(true); setTimeout(onClose, 300); }, 8000);
+    return () => clearTimeout(t);
+  }, []);
+  const dismiss = () => { setHiding(true); setTimeout(onClose, 300); };
+  return (
+    <div style={{ position: "fixed", bottom: 80, right: 24, width: 340, maxWidth: "calc(100vw - 48px)", background: "rgba(10,21,37,0.97)", border: "1px solid rgba(201,168,76,0.4)", borderRadius: 14, boxShadow: "0 20px 60px rgba(0,0,0,0.7)", backdropFilter: "blur(24px)", zIndex: 9999, overflow: "hidden", opacity: hiding ? 0 : 1, transform: hiding ? "translateX(110%)" : "translateX(0)", transition: "opacity .3s, transform .3s" }}>
+      <div style={{ height: 3, background: "linear-gradient(90deg,#C9A84C,#E8C96A)" }} />
+      <div style={{ padding: "16px 18px" }}>
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 10 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{ width: 36, height: 36, borderRadius: 10, background: "rgba(201,168,76,0.15)", border: "1px solid rgba(201,168,76,0.3)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>◆</div>
+            <div>
+              <div style={{ fontSize: 11, color: "#C9A84C", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 2 }}>New Announcement</div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: "#F0EBE0" }}>{ann.title}</div>
+            </div>
+          </div>
+          <button onClick={dismiss} style={{ background: "none", border: "none", color: "#4A5A72", cursor: "pointer", fontSize: 18, padding: "2px 4px", flexShrink: 0 }}>x</button>
+        </div>
+        <p style={{ fontSize: 13, color: "#8A9BB5", margin: "0 0 12px 46px", lineHeight: 1.5 }}>{ann.body}</p>
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginLeft: 46 }}>
+          <button onClick={() => { onView(); dismiss(); }} style={{ fontSize: 12, fontWeight: 600, color: "#C9A84C", background: "rgba(201,168,76,0.1)", border: "1px solid rgba(201,168,76,0.25)", borderRadius: 8, padding: "5px 12px", cursor: "pointer" }}>View</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AnnouncementPopupManager({ session, role, onNavigate }) {
+  const [queue, setQueue] = useState([]);
+  useAnnouncementRealtime(session, role, ann => setQueue(q => [...q, { ...ann, _k: Date.now() }]));
+  const remove = k => setQueue(q => q.filter(a => a._k !== k));
+  const cur = queue[queue.length - 1];
+  if (!cur) return null;
+  return <AnnouncementPopup key={cur._k} ann={cur} onClose={() => remove(cur._k)} onView={onNavigate} />;
+}
+
+// ── useUnreadAnnouncements ────────────────────────────────────
+function useUnreadAnnouncements(session) {
+  const [count, setCount] = useState(0);
+  const refresh = async (uid) => {
+    if (!uid) return;
+    const [anns, reads] = await Promise.all([db.getAnnouncements(), db.getReadAnnouncements(uid)]);
+    setCount(anns.filter(a => !reads.includes(a.id)).length);
+  };
+  useEffect(() => {
+    if (!session?.user?.id) return;
+    refresh(session.user.id);
+    if (!supabase) return;
+    const ch = supabase.channel("unread-badge")
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "announcements" }, () => refresh(session.user.id))
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "announcement_reads" }, () => refresh(session.user.id))
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [session?.user?.id]);
+  return count;
 }
 
 // ── Setup error screen ────────────────────────────────────────
@@ -1020,19 +1171,17 @@ function SeekerProfile() {
   };
 
   const handleSave = async () => {
-    if (!profile?.id) {
-      showError("Profile not ready. Please refresh the page.");
-      return;
-    }
+    if (!profile?.id) { showError("Profile not ready. Please refresh."); return; }
     setSaving(true);
-    await new Promise(r => setTimeout(r, 0)); // yield to browser
+    await new Promise(r => setTimeout(r, 0));
+    const withTimeout = (p) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error("Timed out — check your connection")), 15000))]);
     try {
       const score = computeScore(form, skills);
-      await db.updateSeekerProfile(profile.id, { ...form, years_experience: parseInt(form.years_experience) || 0, profile_score: score });
-      await db.upsertSkills(profile.id, skills);
+      await withTimeout(db.updateSeekerProfile(profile.id, { ...form, years_experience: parseInt(form.years_experience) || 0, profile_score: score }));
+      await withTimeout(db.upsertSkills(profile.id, skills));
       setProfile(p => ({ ...p, ...form, profile_score: score }));
       showSuccess("Profile saved successfully!");
-    } catch (e) { showError(e.message || "Save failed"); }
+    } catch (e) { showError(e.message || "Save failed. Please try again."); }
     finally { setSaving(false); }
   };
 
@@ -1044,7 +1193,6 @@ function SeekerProfile() {
   const handleCVUpload = async (file) => {
     if (!file || !profile) return;
     setCvUploading(true);
-    await new Promise(r => setTimeout(r, 0)); // yield to browser
     try {
       const text = await file.text().catch(() => file.name);
       let review;
@@ -1206,7 +1354,6 @@ function JobMatches() {
   const handleApply = async (job) => {
     if (!profile) return;
     setApplying(true);
-    await new Promise(r => setTimeout(r, 0)); // yield to browser
     try {
       await db.applyToJob(profile.id, job.id, "");
       showSuccess("Application submitted!");
@@ -1513,7 +1660,6 @@ function JourneyTracker() {
     const newIndex = JOURNEY_STAGES.findIndex(s => s.id === stageId);
     if (newIndex <= stageIndex) return;
     setSaving(true);
-    await new Promise(r => setTimeout(r, 0)); // yield to browser
     try {
       const newData = { ...journeyData, [stageId]: { completed_at: new Date().toISOString() } };
       await db.updateJourney(profile.id, stageId, newData);
@@ -1773,13 +1919,12 @@ function PostJob() {
   const publish = async () => {
     if (!profile?.id) { showError("Employer profile not found."); return; }
     setPosting(true);
-    await new Promise(r => setTimeout(r, 0)); // yield to browser
     try {
       await db.createPosting({ ...form, employer_id: profile.id, status: "active", required_skills: form.required_skills });
       showSuccess("Job posted successfully! AI matching will begin immediately.");
       setStep(1);
       setForm({ title: "", type: "full-time", work_mode: "onsite", governorate: "", sector: "", description: "", required_skills: [], min_experience_years: 0, min_education: "bachelor", openings: 1 });
-    } catch (e) { showError(e.message || "Submission failed. Please try again."); }
+    } catch (e) { showError(e?.message || "Submission failed. Please try again."); }
     finally { setPosting(false); }
   };
 
@@ -2237,7 +2382,6 @@ function TrainerProfile() {
   const handleSave = async () => {
     if (!profile) return;
     setSaving(true);
-    await new Promise(r => setTimeout(r, 0)); // yield to browser
     try {
       const score = computeScore(form);
       await db.updateTrainerProfile(profile.id, { ...form, years_experience: parseInt(form.years_experience) || 0, profile_score: score });
@@ -3565,7 +3709,6 @@ function InjazProfile() {
   const handleSave = async () => {
     if (!profile) return;
     setSaving(true);
-    await new Promise(r => setTimeout(r, 0)); // yield to browser
     try {
       await db.updateInjazTeamProfile(profile.id, form);
       setProfile(p => ({ ...p, ...form }));
@@ -3739,13 +3882,12 @@ function CheckpointManager({ isInjazTeam = false }) {
 
   const handleSave = async () => {
     setSaving(true);
-    await new Promise(r => setTimeout(r, 0)); // yield to browser
     try {
       await db.updateProgramCheckpoint(form.checkpoint, form.status, form.note);
       showSuccess("Program checkpoint updated! All participants will see the new stage.");
       const d = await db.getProgramCheckpoint();
       setCheckpoint(d);
-    } catch (e) { showError(e.message || "Submission failed. Please try again."); }
+    } catch (e) { showError(e?.message || "Submission failed. Please try again."); }
     finally { setSaving(false); }
   };
 
@@ -3885,7 +4027,6 @@ function MyAttendance() {
       return;
     }
     setAdding(true);
-    await new Promise(r => setTimeout(r, 0)); // yield to browser
     try {
       const added = await db.addAttendanceSession({
         seeker_id: profile.id,
@@ -3906,7 +4047,7 @@ function MyAttendance() {
         setReflectionSession({ ...added });
         setShowReflection(true);
       }
-    } catch (e) { showError(e.message || "Submission failed. Please try again."); }
+    } catch (e) { showError(e?.message || "Submission failed. Please try again."); }
     finally { setAdding(false); }
   };
 
@@ -3916,7 +4057,7 @@ function MyAttendance() {
       await db.deleteAttendanceSession(id);
       setSessions(s => s.filter(x => x.id !== id));
       showSuccess("Session removed.");
-    } catch (e) { showError(e.message || "Submission failed. Please try again."); }
+    } catch (e) { showError(e?.message || "Submission failed. Please try again."); }
     finally { setDeleting(null); }
   };
 
@@ -4251,7 +4392,7 @@ function AttendanceVerification({ isInjazTeam = false }) {
       await db.verifyAttendanceSession(id, session?.user?.id);
       setAllSessions(prev => prev.map(s => s.id === id ? { ...s, verified: true } : s));
       showSuccess("Session verified!");
-    } catch (e) { showError(e.message || "Submission failed. Please try again."); }
+    } catch (e) { showError(e?.message || "Submission failed. Please try again."); }
     finally { setVerifying(null); }
   };
 
@@ -4471,7 +4612,6 @@ function ReflectionCardModal({ session, sessionNumber, onClose, onSave }) {
   const handleSave = async () => {
     if (!rating) { showError("Please add a session rating."); return; }
     setSaving(true);
-    await new Promise(r => setTimeout(r, 0));
     try {
       await db.saveReflection({
         seeker_id: profile.id,
@@ -4487,7 +4627,7 @@ function ReflectionCardModal({ session, sessionNumber, onClose, onSave }) {
       showSuccess("Reflection card saved!");
       onSave();
       onClose();
-    } catch (e) { showError(e.message || "Submission failed. Please try again."); }
+    } catch (e) { showError(e?.message || "Submission failed. Please try again."); }
     finally { setSaving(false); }
   };
 
@@ -4636,22 +4776,15 @@ function RadioGroup({ options, value, onChange }) {
     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
       {options.map(opt => {
         const val = opt.value || opt;
-        const label = opt.label || opt;
-        const selected = value === val;
+        const lbl = opt.label || opt;
+        const sel = value === val;
         return (
-          <button key={val} type="button"
-            onClick={() => onChange(val)}
-            style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 14px", borderRadius: 10,
-              border: `1px solid ${selected ? "rgba(201,168,76,0.4)" : "rgba(255,255,255,0.08)"}`,
-              background: selected ? "rgba(201,168,76,0.08)" : "rgba(255,255,255,0.02)",
-              cursor: "pointer", transition: "border .15s, background .15s",
-              width: "100%", textAlign: "left", fontFamily: "'DM Sans',sans-serif" }}>
-            <div style={{ width: 16, height: 16, borderRadius: "50%", flexShrink: 0,
-              border: `2px solid ${selected ? "#C9A84C" : "rgba(255,255,255,0.2)"}`,
-              display: "flex", alignItems: "center", justifyContent: "center" }}>
-              {selected && <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#C9A84C" }} />}
+          <button key={val} type="button" onClick={() => onChange(val)}
+            style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 14px", borderRadius: 10, border: `1px solid ${sel ? "rgba(201,168,76,0.4)" : "rgba(255,255,255,0.08)"}`, background: sel ? "rgba(201,168,76,0.08)" : "rgba(255,255,255,0.02)", cursor: "pointer", width: "100%", textAlign: "left", fontFamily: "'DM Sans',sans-serif", transition: "border .15s,background .15s" }}>
+            <div style={{ width: 16, height: 16, borderRadius: "50%", border: `2px solid ${sel ? "#C9A84C" : "rgba(255,255,255,0.2)"}`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              {sel && <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#C9A84C" }} />}
             </div>
-            <span style={{ fontSize: 13, color: selected ? "#C9A84C" : "#F0EBE0" }}>{label}</span>
+            <span style={{ fontSize: 13, color: sel ? "#C9A84C" : "#F0EBE0" }}>{lbl}</span>
           </button>
         );
       })}
@@ -4689,7 +4822,9 @@ function SeekerAssessments() {
   const [submitted, setSubmitted] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeForm, setActiveForm] = useState(null);
-  const [expanded, setExpanded] = useState(null); // which submission is expanded
+  const [expandedView, setExpandedView] = useState(null);
+
+  const reload = () => db.getMyAssessments(profile?.id, "seeker").then(setSubmitted).catch(() => {});
 
   useEffect(() => {
     if (profile?.id) {
@@ -4697,9 +4832,7 @@ function SeekerAssessments() {
     } else setLoading(false);
   }, [profile?.id]);
 
-  const getSubmission = (type) => submitted.find(s => s.form_type === type);
-  const hasSubmitted = (type) => !!getSubmission(type);
-  const reload = () => db.getMyAssessments(profile.id, "seeker").then(setSubmitted).catch(() => {});
+  const hasSubmitted = (type) => submitted.some(s => s.form_type === type);
 
   const forms = [
     { id: "mentee_first_meeting", title: "First Meeting Feedback", desc: "Share your experience after your first 1-on-1 meeting with your mentor", icon: "◆", color: "#27AE60", timing: "After 1st session", locked: false },
@@ -4707,14 +4840,14 @@ function SeekerAssessments() {
     { id: "mentee_final", title: "Final Program Assessment", desc: "Share your overall experience and help shape the next edition", icon: "★", color: "#C9A84C", timing: "End of program", locked: true, lockedMsg: "This survey will be unlocked at the end of the program" },
   ];
 
-  // Block locked forms — only first meeting is open
+  // Block locked forms at routing level
   if (activeForm === "mentee_first_meeting") return <MenteeFirstMeetingForm onBack={() => setActiveForm(null)} onSubmit={() => { reload(); setActiveForm(null); }} />;
   if (activeForm === "mentee_mid_program" || activeForm === "mentee_final") { setActiveForm(null); return null; }
 
   return (
     <div>
       <div style={{ marginBottom: 28 }}>
-        <div style={{ fontSize: 11, color: "#C9A84C", letterSpacing: 2, textTransform: "uppercase", marginBottom: 8 }}>◈ Intersection Program</div>
+        <div style={{ fontSize: 11, color: "#C9A84C", letterSpacing: 2, textTransform: "uppercase", marginBottom: 8 }}>◈ Intersection 5.0 Program</div>
         <h1 style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 26, fontWeight: 700, color: "#F0EBE0", marginBottom: 6 }}>My Assessments</h1>
         <p style={{ color: "#8A9BB5", fontSize: 14 }}>Program feedback forms — only for 1-on-1 mentorship participants</p>
       </div>
@@ -4722,27 +4855,15 @@ function SeekerAssessments() {
       {loading ? <div style={{ display: "flex", justifyContent: "center", padding: 60 }}><Spinner size={32} /></div>
         : <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           {forms.map(form => {
-            const submission = getSubmission(form.id);
+            const submission = submitted.find(s => s.form_type === form.id);
             const isDone = !!submission;
             const isLocked = form.locked && !isDone;
-            const isExpanded = expanded === form.id;
-
+            const isExpanded = expandedView === form.id;
             return (
-              <div key={form.id} className="card" style={{
-                padding: 0, overflow: "hidden",
-                border: isDone ? "1px solid rgba(39,174,96,0.3)" : isLocked ? "1px solid rgba(255,255,255,0.06)" : `1px solid ${form.color}22`,
-                opacity: isLocked ? 0.55 : 1,
-                transition: "all .3s",
-              }}>
-                {/* Card header row */}
+              <div key={form.id} className="card" style={{ padding: 0, overflow: "hidden", border: isDone ? "1px solid rgba(39,174,96,0.3)" : isLocked ? "1px solid rgba(255,255,255,0.06)" : `1px solid ${form.color}22`, opacity: isLocked ? 0.6 : 1, transition: "all .3s" }}>
                 <div style={{ padding: "22px 28px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <div style={{ display: "flex", gap: 20, alignItems: "center" }}>
-                    <div style={{ width: 52, height: 52, borderRadius: "50%",
-                      background: isDone ? "rgba(39,174,96,0.12)" : isLocked ? "rgba(255,255,255,0.04)" : `${form.color}22`,
-                      border: `1px solid ${isDone ? "rgba(39,174,96,0.3)" : isLocked ? "rgba(255,255,255,0.1)" : form.color + "44"}`,
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                      fontSize: 22, color: isDone ? "#4AE08A" : isLocked ? "#4A5A72" : form.color, flexShrink: 0,
-                    }}>
+                    <div style={{ width: 52, height: 52, borderRadius: "50%", background: isDone ? "rgba(39,174,96,0.12)" : isLocked ? "rgba(255,255,255,0.04)" : `${form.color}22`, border: `1px solid ${isDone ? "rgba(39,174,96,0.3)" : isLocked ? "rgba(255,255,255,0.1)" : form.color + "44"}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, color: isDone ? "#4AE08A" : isLocked ? "#4A5A72" : form.color, flexShrink: 0 }}>
                       {isDone ? "✓" : isLocked ? "🔒" : form.icon}
                     </div>
                     <div>
@@ -4751,22 +4872,14 @@ function SeekerAssessments() {
                         <span style={{ fontSize: 10, background: isDone ? "rgba(39,174,96,0.12)" : isLocked ? "rgba(255,255,255,0.04)" : `${form.color}22`, color: isDone ? "#4AE08A" : isLocked ? "#4A5A72" : form.color, border: `1px solid ${isDone ? "rgba(39,174,96,0.2)" : isLocked ? "rgba(255,255,255,0.08)" : form.color + "44"}`, borderRadius: 20, padding: "2px 8px" }}>{form.timing}</span>
                         {isLocked && <span style={{ fontSize: 10, background: "rgba(255,255,255,0.06)", color: "#4A5A72", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 20, padding: "2px 8px" }}>Locked</span>}
                       </div>
-                      <div style={{ fontSize: 13, color: "#8A9BB5" }}>
-                        {isDone
-                          ? `Submitted ${new Date(submission.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}`
-                          : isLocked ? form.lockedMsg : form.desc}
-                      </div>
+                      <div style={{ fontSize: 13, color: "#8A9BB5" }}>{isDone ? `Submitted ${new Date(submission.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}` : isLocked ? form.lockedMsg : form.desc}</div>
                     </div>
                   </div>
-
                   <div style={{ flexShrink: 0, marginLeft: 20, display: "flex", gap: 8, alignItems: "center" }}>
                     {isDone ? (
                       <>
                         <span style={{ fontSize: 12, background: "rgba(39,174,96,0.12)", color: "#4AE08A", border: "1px solid rgba(39,174,96,0.3)", borderRadius: 20, padding: "6px 14px", fontWeight: 600 }}>✓ Submitted</span>
-                        <button onClick={() => setExpanded(isExpanded ? null : form.id)}
-                          style={{ fontSize: 12, fontWeight: 600, color: "#C9A84C", background: "rgba(201,168,76,0.08)", border: "1px solid rgba(201,168,76,0.25)", borderRadius: 20, padding: "6px 14px", cursor: "pointer", fontFamily: "'DM Sans',sans-serif" }}>
-                          {isExpanded ? "Hide ▲" : "View ▼"}
-                        </button>
+                        <button onClick={() => setExpandedView(isExpanded ? null : form.id)} style={{ fontSize: 12, fontWeight: 600, color: "#C9A84C", background: "rgba(201,168,76,0.08)", border: "1px solid rgba(201,168,76,0.25)", borderRadius: 20, padding: "6px 14px", cursor: "pointer", fontFamily: "'DM Sans',sans-serif" }}>{isExpanded ? "Hide ▲" : "View ▼"}</button>
                       </>
                     ) : isLocked ? (
                       <span style={{ fontSize: 12, background: "rgba(255,255,255,0.04)", color: "#4A5A72", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 20, padding: "6px 14px" }}>Not yet available</span>
@@ -4775,25 +4888,20 @@ function SeekerAssessments() {
                     )}
                   </div>
                 </div>
-
-                {/* Expanded submission view */}
                 {isDone && isExpanded && submission?.data && (
                   <div style={{ borderTop: "1px solid rgba(39,174,96,0.15)", padding: "20px 28px 28px" }}>
                     <div style={{ fontSize: 11, color: "#4AE08A", fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", marginBottom: 16 }}>◈ Your Submission</div>
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
                       {Object.entries(submission.data).map(([key, value]) => {
-                        if (value === null || value === undefined || value === "" || (Array.isArray(value) && value.length === 0)) return null;
+                        if (!value && value !== 0) return null;
+                        if (Array.isArray(value) && value.length === 0) return null;
                         const label = key.replace(/_/g, " ").replace(/\w/g, l => l.toUpperCase());
                         const isLong = typeof value === "string" && value.length > 55;
-                        const isNum = typeof value === "number";
                         return (
                           <div key={key} style={{ background: "rgba(39,174,96,0.04)", border: "1px solid rgba(39,174,96,0.12)", borderRadius: 10, padding: "12px 14px", gridColumn: isLong ? "1 / -1" : "auto" }}>
                             <div style={{ fontSize: 10, color: "#C9A84C", fontWeight: 700, letterSpacing: 0.8, textTransform: "uppercase", marginBottom: 6 }}>{label}</div>
                             <div style={{ fontSize: 13, color: "#F0EBE0", lineHeight: 1.6 }}>
-                              {isNum
-                                ? <span>{[1,2,3,4,5].map(s => <span key={s} style={{ color: s <= value ? "#C9A84C" : "rgba(255,255,255,0.15)" }}>★</span>)} <span style={{ color: "#C9A84C", fontWeight: 700, marginLeft: 4 }}>{value}/5</span></span>
-                                : Array.isArray(value) ? value.join(", ")
-                                : String(value)}
+                              {typeof value === "number" ? <span>{[1,2,3,4,5].map(s => <span key={s} style={{ color: s <= value ? "#C9A84C" : "rgba(255,255,255,0.15)" }}>★</span>)} <span style={{ color: "#C9A84C", fontWeight: 700 }}> {value}/5</span></span> : Array.isArray(value) ? value.join(", ") : String(value)}
                             </div>
                           </div>
                         );
@@ -4977,28 +5085,17 @@ function MenteeFirstMeetingForm({ onBack, onSubmit }) {
   const set = (k, v) => setF(p => ({ ...p, [k]: v }));
 
   const handleSubmit = async () => {
-    if (!f.mentor_name) { showError("Please enter your mentor's name."); return; }
-    if (!f.had_first_meeting) { showError("Please answer whether you had your first meeting."); return; }
-    if (f.had_first_meeting === "yes") {
-      if (!f.first_meeting_date) { showError("Please enter the date of your first meeting."); return; }
-      if (!f.mentor_encouraging) { showError("Please answer whether your mentor was encouraging."); return; }
-      if (!f.meeting_description) { showError("Please describe your first meeting."); return; }
-      if (!f.agreed_on_frequency) { showError("Please answer whether you agreed on meeting frequency."); return; }
-      if (!f.greatest_strengths) { showError("Please fill in your greatest strengths."); return; }
-      if (!f.major_challenges) { showError("Please fill in your major challenges."); return; }
-      if (!f.career_goals) { showError("Please fill in your career goals."); return; }
-      if (!f.areas_of_support) { showError("Please fill in the areas you need support in."); return; }
-    }
+    if (!f.mentor_name || !f.had_first_meeting) { showError("Please fill required fields."); return; }
     setSaving(true);
-    await new Promise(r => setTimeout(r, 0)); // yield to browser
-    // yield to browser paint before async work (fixes INP)
     await new Promise(r => setTimeout(r, 0));
-    const withTimeout = (p) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error("Request timed out — check your connection")), 15000))]);
     try {
-      await withTimeout(db.saveAssessment({ seeker_id: profile.id, form_type: "mentee_first_meeting", data: f }));
+      await Promise.race([
+        db.saveAssessment({ seeker_id: profile.id, form_type: "mentee_first_meeting", data: f }),
+        new Promise((_, rej) => setTimeout(() => rej(new Error("Request timed out")), 15000)),
+      ]);
       showSuccess("Assessment submitted! Thank you.");
       onSubmit();
-    } catch (e) { showError(e.message || "Submission failed. Please try again."); }
+    } catch (e) { showError(e?.message || "Submission failed. Please try again."); }
     finally { setSaving(false); }
   };
 
@@ -5117,10 +5214,13 @@ function MenteeMidProgramForm({ onBack, onSubmit }) {
     setSaving(true);
     await new Promise(r => setTimeout(r, 0));
     try {
-      await Promise.race([db.saveAssessment({ seeker_id: profile.id, form_type: "mentee_mid_program", data: f }), new Promise((_, rej) => setTimeout(() => rej(new Error("Timed out")), 15000))]);
+      await Promise.race([
+        db.saveAssessment({ seeker_id: profile.id, form_type: "mentee_mid_program", data: f }),
+        new Promise((_, rej) => setTimeout(() => rej(new Error("Request timed out")), 15000)),
+      ]);
       showSuccess("Mid-program assessment submitted! Thank you.");
       onSubmit();
-    } catch (e) { showError(e.message || "Submission failed. Please try again."); }
+    } catch (e) { showError(e?.message || "Submission failed. Please try again."); }
     finally { setSaving(false); }
   };
 
@@ -5223,10 +5323,13 @@ function MenteeFinalForm({ onBack, onSubmit }) {
     setSaving(true);
     await new Promise(r => setTimeout(r, 0));
     try {
-      await Promise.race([db.saveAssessment({ seeker_id: profile.id, form_type: "mentee_final", data: f }), new Promise((_, rej) => setTimeout(() => rej(new Error("Timed out")), 15000))]);
+      await Promise.race([
+        db.saveAssessment({ seeker_id: profile.id, form_type: "mentee_final", data: f }),
+        new Promise((_, rej) => setTimeout(() => rej(new Error("Request timed out")), 15000)),
+      ]);
       showSuccess("Final assessment submitted! Thank you for your journey with us.");
       onSubmit();
-    } catch (e) { showError(e.message || "Submission failed. Please try again."); }
+    } catch (e) { showError(e?.message || "Submission failed. Please try again."); }
     finally { setSaving(false); }
   };
 
@@ -5389,10 +5492,13 @@ function MentorFirstMeetingForm({ onBack, onSubmit }) {
     setSaving(true);
     await new Promise(r => setTimeout(r, 0));
     try {
-      await Promise.race([db.saveAssessment({ trainer_id: profile.id, form_type: "mentor_first_meeting", data: f }), new Promise((_, rej) => setTimeout(() => rej(new Error("Timed out")), 15000))]);
+      await Promise.race([
+        db.saveAssessment({ trainer_id: profile.id, form_type: "mentor_first_meeting", data: f }),
+        new Promise((_, rej) => setTimeout(() => rej(new Error("Request timed out")), 15000)),
+      ]);
       showSuccess("Assessment submitted! Thank you.");
       onSubmit();
-    } catch (e) { showError(e.message || "Submission failed. Please try again."); }
+    } catch (e) { showError(e?.message || "Submission failed. Please try again."); }
     finally { setSaving(false); }
   };
 
@@ -5490,10 +5596,13 @@ function MentorFinalForm({ onBack, onSubmit }) {
     setSaving(true);
     await new Promise(r => setTimeout(r, 0));
     try {
-      await Promise.race([db.saveAssessment({ trainer_id: profile.id, form_type: "mentor_final", data: f }), new Promise((_, rej) => setTimeout(() => rej(new Error("Timed out")), 15000))]);
+      await Promise.race([
+        db.saveAssessment({ trainer_id: profile.id, form_type: "mentor_final", data: f }),
+        new Promise((_, rej) => setTimeout(() => rej(new Error("Request timed out")), 15000)),
+      ]);
       showSuccess("Final assessment submitted! Thank you for your incredible contribution.");
       onSubmit();
-    } catch (e) { showError(e.message || "Submission failed. Please try again."); }
+    } catch (e) { showError(e?.message || "Submission failed. Please try again."); }
     finally { setSaving(false); }
   };
 
@@ -5578,258 +5687,85 @@ function MentorFinalForm({ onBack, onSubmit }) {
 // ── INJAZ Team: View All Assessments ─────────────────────────
 function InjazAssessmentsView() {
   const [assessments, setAssessments] = useState([]);
-  const [reflections, setReflections] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState("reflections");
   const [filter, setFilter] = useState("all");
   const [expanded, setExpanded] = useState(null);
-  const [search, setSearch] = useState("");
 
   useEffect(() => {
-    Promise.all([
-      db.getAllAssessments().catch(() => []),
-      db.getAllReflections().catch(() => []),
-    ]).then(([a, r]) => {
-      setAssessments(a);
-      setReflections(r);
-    }).finally(() => setLoading(false));
+    db.getAllAssessments().then(setAssessments).catch(() => {}).finally(() => setLoading(false));
   }, []);
 
   const formLabels = {
-    mentee_first_meeting: { label: "Mentee — First Meeting", color: "#27AE60", icon: "◆" },
-    mentee_mid_program:   { label: "Mentee — Mid-Program",   color: "#2980B9", icon: "◈" },
-    mentee_final:         { label: "Mentee — Final",         color: "#C9A84C", icon: "★" },
-    mentor_first_meeting: { label: "Mentor — First Meeting", color: "#8E44AD", icon: "◉" },
-    mentor_final:         { label: "Mentor — Final",         color: "#E67E22", icon: "✦" },
+    mentee_first_meeting: { label: "Mentee — First Meeting", color: "#27AE60" },
+    mentee_mid_program: { label: "Mentee — Mid-Program", color: "#2980B9" },
+    mentee_final: { label: "Mentee — Final", color: "#C9A84C" },
+    mentor_first_meeting: { label: "Mentor — First Meeting", color: "#8E44AD" },
+    mentor_final: { label: "Mentor — Final", color: "#E67E22" },
   };
 
-  const filteredAssessments = assessments.filter(a => {
-    const matchFilter = filter === "all" || a.form_type === filter;
-    const name = (a.job_seekers?.full_name || a.trainers?.full_name || "").toLowerCase();
-    return matchFilter && (!search || name.includes(search.toLowerCase()));
-  });
-
-  const filteredReflections = reflections.filter(r => {
-    const name = (r.job_seekers?.full_name || "").toLowerCase();
-    return !search || name.includes(search.toLowerCase());
-  });
-
-  const avgRating = reflections.length > 0
-    ? (reflections.reduce((s, r) => s + (r.rating || 0), 0) / reflections.length).toFixed(1)
-    : "—";
-
-  const uniqueParticipants = [...new Set(
-    reflections.map(r => r.seeker_id)
-      .concat(assessments.map(a => a.seeker_id).filter(Boolean))
-  )].length;
+  const filtered = filter === "all" ? assessments : assessments.filter(a => a.form_type === filter);
 
   return (
     <div>
-      {/* Header */}
-      <div style={{ marginBottom: 24 }}>
-        <div style={{ fontSize: 11, color: "#C9A84C", letterSpacing: 2, textTransform: "uppercase", marginBottom: 6 }}>◈ Intersection 5.0 Program</div>
-        <h1 style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 26, fontWeight: 700, color: "#F0EBE0", marginBottom: 4 }}>Assessments & Reflections</h1>
-        <p style={{ fontSize: 13, color: "#8A9BB5" }}>All participant submissions — program feedback forms and session reflection cards</p>
+      <div style={{ marginBottom: 28 }}>
+        <h1 style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 24, fontWeight: 700, color: "#F0EBE0", marginBottom: 4 }}>Program Assessments</h1>
+        <p style={{ fontSize: 13, color: "#8A9BB5" }}>{assessments.length} submissions across all forms</p>
       </div>
 
-      {/* KPI row */}
-      <div className="grid-4" style={{ marginBottom: 24 }}>
-        {[
-          { label: "Reflection Cards", value: reflections.length, color: "#C9A84C", icon: "◉", sub: "avg " + avgRating + "★" },
-          { label: "Assessments", value: assessments.length, color: "#2980B9", icon: "◈", sub: Object.keys(formLabels).length + " form types" },
-          { label: "Participants Responded", value: uniqueParticipants, color: "#27AE60", icon: "◆", sub: "unique participants" },
-          { label: "Avg Session Rating", value: avgRating === "—" ? "—" : avgRating + "★", color: "#8E44AD", icon: "★", sub: "from " + reflections.length + " reflections" },
-        ].map(s => (
-          <div key={s.label} className="card" style={{ padding: 20 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
-              <span style={{ fontSize: 18, color: s.color }}>{s.icon}</span>
-              <div style={{ width: 6, height: 6, borderRadius: "50%", background: s.color, boxShadow: "0 0 8px " + s.color }} />
+      {/* Summary */}
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 24 }}>
+        {Object.entries(formLabels).map(([type, info]) => {
+          const count = assessments.filter(a => a.form_type === type).length;
+          return (
+            <div key={type} className="card" style={{ padding: "14px 18px", cursor: "pointer", border: filter === type ? `1px solid ${info.color}66` : "1px solid rgba(201,168,76,0.12)", transition: "all .2s", minWidth: 140 }} onClick={() => setFilter(filter === type ? "all" : type)}>
+              <div style={{ fontSize: 22, fontWeight: 700, color: "#F0EBE0", marginBottom: 4 }}>{count}</div>
+              <div style={{ fontSize: 11, color: info.color, fontWeight: 600 }}>{info.label}</div>
             </div>
-            <div style={{ fontSize: 28, fontWeight: 700, color: "#F0EBE0", marginBottom: 2 }}>{loading ? "—" : s.value}</div>
-            <div style={{ fontSize: 12, color: "#8A9BB5", marginBottom: 3 }}>{s.label}</div>
-            <div style={{ fontSize: 11, color: s.color }}>{s.sub}</div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
-      {/* Tabs + Search */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20, gap: 12, flexWrap: "wrap" }}>
-        <div style={{ display: "flex", gap: 6, background: "rgba(255,255,255,0.04)", borderRadius: 12, padding: 4 }}>
-          {[
-            { id: "reflections", label: "◉ Reflection Cards (" + reflections.length + ")" },
-            { id: "assessments", label: "◈ Assessment Forms (" + assessments.length + ")" },
-          ].map(t => (
-            <button key={t.id} onClick={() => { setTab(t.id); setExpanded(null); setFilter("all"); }}
-              style={{ fontSize: 13, fontWeight: 600, padding: "8px 18px", borderRadius: 10, border: tab === t.id ? "1px solid rgba(201,168,76,0.3)" : "1px solid transparent", cursor: "pointer", fontFamily: "'DM Sans',sans-serif", transition: "all .2s",
-                background: tab === t.id ? "rgba(201,168,76,0.15)" : "transparent",
-                color: tab === t.id ? "#C9A84C" : "#8A9BB5",
-              }}>
-              {t.label}
-            </button>
-          ))}
-        </div>
-        <input className="input-field" placeholder="Search by participant name..." value={search}
-          onChange={e => setSearch(e.target.value)}
-          style={{ maxWidth: 260, padding: "8px 14px", fontSize: 13 }} />
-      </div>
-
-      {loading ? (
-        <div style={{ display: "flex", justifyContent: "center", padding: 60 }}><Spinner size={36} /></div>
-      ) : tab === "reflections" ? (
-        /* Reflection Cards */
-        <div>
-          {filteredReflections.length === 0 ? (
-            <div className="card" style={{ textAlign: "center", padding: 60, color: "#4A5A72" }}>
-              <div style={{ fontSize: 32, marginBottom: 12, opacity: .3 }}>◉</div>
-              <div>{search ? "No reflection cards match your search." : "No reflection cards submitted yet."}</div>
-            </div>
-          ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              {filteredReflections.map(r => {
-                const isExp = expanded === r.id;
-                const name = r.job_seekers?.full_name || "Participant";
-                const date = r.session_date || r.created_at;
-                return (
-                  <div key={r.id} className="card" style={{ padding: 0, overflow: "hidden", border: isExp ? "1px solid rgba(201,168,76,0.35)" : "1px solid rgba(201,168,76,0.12)", transition: "border .2s" }}>
-                    <div style={{ padding: "16px 22px", display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer" }} onClick={() => setExpanded(isExp ? null : r.id)}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-                        <div style={{ width: 38, height: 38, borderRadius: "50%", background: "rgba(201,168,76,0.12)", border: "1px solid rgba(201,168,76,0.25)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, color: "#C9A84C", fontWeight: 700, flexShrink: 0 }}>
-                          {name.charAt(0).toUpperCase()}
-                        </div>
-                        <div>
-                          <div style={{ fontWeight: 700, fontSize: 14, color: "#F0EBE0" }}>{name}</div>
-                          <div style={{ fontSize: 12, color: "#8A9BB5" }}>
-                            {"Session #" + (r.session_number || "—")}
-                            {r.mentor_name ? " · Mentor: " + r.mentor_name : ""}
-                            {date ? " · " + new Date(date).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : ""}
-                          </div>
-                        </div>
-                      </div>
-                      <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-                        {r.rating > 0 && (
-                          <div style={{ display: "flex", alignItems: "center", gap: 3 }}>
-                            {[1,2,3,4,5].map(s => (
-                              <span key={s} style={{ fontSize: 13, color: s <= r.rating ? "#C9A84C" : "rgba(255,255,255,0.12)" }}>★</span>
-                            ))}
-                            <span style={{ fontSize: 12, color: "#C9A84C", fontWeight: 700, marginLeft: 4 }}>{r.rating}/5</span>
-                          </div>
-                        )}
-                        <span style={{ color: "#C9A84C", fontSize: 16 }}>{isExp ? "▲" : "▼"}</span>
-                      </div>
-                    </div>
-                    {isExp && (
-                      <div style={{ padding: "0 22px 22px", borderTop: "1px solid rgba(255,255,255,0.06)" }}>
-                        <div style={{ marginTop: 18, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                          {r.takeaways?.length > 0 && (
-                            <div style={{ background: "rgba(201,168,76,0.05)", border: "1px solid rgba(201,168,76,0.15)", borderRadius: 12, padding: "14px 16px", gridColumn: "1 / -1" }}>
-                              <div style={{ fontSize: 10, color: "#C9A84C", fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", marginBottom: 10 }}>◆ Key Takeaways</div>
-                              {r.takeaways.map((t, i) => (
-                                <div key={i} style={{ display: "flex", gap: 10, alignItems: "flex-start", marginBottom: 6 }}>
-                                  <span style={{ fontSize: 11, color: "#C9A84C", marginTop: 2, flexShrink: 0 }}>{i + 1}.</span>
-                                  <span style={{ fontSize: 13, color: "#F0EBE0", lineHeight: 1.6 }}>{t}</span>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                          {r.action_steps?.length > 0 && (
-                            <div style={{ background: "rgba(41,128,185,0.05)", border: "1px solid rgba(41,128,185,0.2)", borderRadius: 12, padding: "14px 16px" }}>
-                              <div style={{ fontSize: 10, color: "#2980B9", fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", marginBottom: 10 }}>◉ Action Steps</div>
-                              {r.action_steps.map((s, i) => (
-                                <div key={i} style={{ display: "flex", gap: 8, marginBottom: 5 }}>
-                                  <span style={{ fontSize: 10, color: "#2980B9", marginTop: 3 }}>→</span>
-                                  <span style={{ fontSize: 13, color: "#F0EBE0", lineHeight: 1.5 }}>{s}</span>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                          {r.personal_reflection && (
-                            <div style={{ background: "rgba(142,68,173,0.05)", border: "1px solid rgba(142,68,173,0.2)", borderRadius: 12, padding: "14px 16px" }}>
-                              <div style={{ fontSize: 10, color: "#8E44AD", fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", marginBottom: 8 }}>✦ Personal Reflection</div>
-                              <div style={{ fontSize: 13, color: "#F0EBE0", lineHeight: 1.7, fontStyle: "italic" }}>"{r.personal_reflection}"</div>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    )}
+      {loading ? <div style={{ display: "flex", justifyContent: "center", padding: 60 }}><Spinner size={36} /></div>
+        : filtered.length === 0 ? <div className="card" style={{ textAlign: "center", padding: 60, color: "#4A5A72" }}>No submissions yet.</div>
+        : <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {filtered.map(a => {
+            const info = formLabels[a.form_type] || { label: a.form_type, color: "#C9A84C" };
+            const isExpanded = expanded === a.id;
+            const name = a.job_seekers?.full_name || a.trainers?.full_name || "—";
+            return (
+              <div key={a.id} className="card" style={{ padding: 0, overflow: "hidden", border: isExpanded ? `1px solid ${info.color}44` : "1px solid rgba(201,168,76,0.12)" }}>
+                <div style={{ padding: "18px 24px", display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer" }} onClick={() => setExpanded(isExpanded ? null : a.id)}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                    <span style={{ fontSize: 11, background: `${info.color}22`, color: info.color, border: `1px solid ${info.color}44`, borderRadius: 20, padding: "3px 12px", fontWeight: 600, whiteSpace: "nowrap" }}>{info.label}</span>
+                    <span style={{ fontWeight: 600, color: "#F0EBE0", fontSize: 14 }}>{name}</span>
                   </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      ) : (
-        /* Assessment Forms */
-        <div>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 18 }}>
-            <button onClick={() => setFilter("all")} style={{ fontSize: 12, padding: "5px 14px", borderRadius: 20, border: "1px solid " + (filter === "all" ? "rgba(201,168,76,0.5)" : "rgba(255,255,255,0.1)"), background: filter === "all" ? "rgba(201,168,76,0.1)" : "transparent", color: filter === "all" ? "#C9A84C" : "#8A9BB5", cursor: "pointer", fontFamily: "'DM Sans',sans-serif" }}>
-              All ({assessments.length})
-            </button>
-            {Object.entries(formLabels).map(([type, info]) => {
-              const count = assessments.filter(a => a.form_type === type).length;
-              if (count === 0) return null;
-              return (
-                <button key={type} onClick={() => setFilter(filter === type ? "all" : type)}
-                  style={{ fontSize: 12, padding: "5px 14px", borderRadius: 20, border: "1px solid " + (filter === type ? info.color + "88" : "rgba(255,255,255,0.1)"), background: filter === type ? info.color + "18" : "transparent", color: filter === type ? info.color : "#8A9BB5", cursor: "pointer", fontFamily: "'DM Sans',sans-serif" }}>
-                  {info.icon} {info.label} ({count})
-                </button>
-              );
-            })}
-          </div>
-          {filteredAssessments.length === 0 ? (
-            <div className="card" style={{ textAlign: "center", padding: 60, color: "#4A5A72" }}>
-              <div style={{ fontSize: 32, marginBottom: 12, opacity: .3 }}>◈</div>
-              <div>No assessments submitted yet.</div>
-            </div>
-          ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              {filteredAssessments.map(a => {
-                const info = formLabels[a.form_type] || { label: a.form_type, color: "#C9A84C", icon: "◈" };
-                const isExp = expanded === a.id;
-                const name = a.job_seekers?.full_name || a.trainers?.full_name || "—";
-                return (
-                  <div key={a.id} className="card" style={{ padding: 0, overflow: "hidden", border: isExp ? "1px solid " + info.color + "44" : "1px solid rgba(201,168,76,0.12)", transition: "border .2s" }}>
-                    <div style={{ padding: "16px 22px", display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer" }} onClick={() => setExpanded(isExp ? null : a.id)}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-                        <div style={{ width: 38, height: 38, borderRadius: "50%", background: info.color + "15", border: "1px solid " + info.color + "30", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, color: info.color, flexShrink: 0 }}>{info.icon}</div>
-                        <div>
-                          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2 }}>
-                            <span style={{ fontWeight: 700, color: "#F0EBE0", fontSize: 14 }}>{name}</span>
-                            <span style={{ fontSize: 10, background: info.color + "20", color: info.color, border: "1px solid " + info.color + "40", borderRadius: 20, padding: "2px 10px", fontWeight: 600 }}>{info.label}</span>
-                          </div>
-                          <div style={{ fontSize: 12, color: "#4A5A72" }}>{new Date(a.created_at).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", year: "numeric" })}</div>
-                        </div>
-                      </div>
-                      <span style={{ color: "#C9A84C", fontSize: 16 }}>{isExp ? "▲" : "▼"}</span>
-                    </div>
-                    {isExp && (
-                      <div style={{ padding: "0 22px 22px", borderTop: "1px solid rgba(255,255,255,0.06)" }}>
-                        <div style={{ marginTop: 16, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                          {Object.entries(a.data || {}).map(([key, value]) => {
-                            if (value === null || value === undefined || value === "" || (Array.isArray(value) && value.length === 0)) return null;
-                            const lbl = key.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase());
-                            const isLong = typeof value === "string" && value.length > 60;
-                            return (
-                              <div key={key} style={{ background: "rgba(255,255,255,0.03)", borderRadius: 10, padding: "12px 14px", gridColumn: isLong ? "1 / -1" : "auto" }}>
-                                <div style={{ fontSize: 10, color: "#C9A84C", fontWeight: 700, letterSpacing: .8, textTransform: "uppercase", marginBottom: 6 }}>{lbl}</div>
-                                <div style={{ fontSize: 13, color: "#F0EBE0", lineHeight: 1.6 }}>
-                                  {typeof value === "number"
-                                    ? <span>{[1,2,3,4,5].map(s => <span key={s} style={{ color: s <= value ? "#C9A84C" : "rgba(255,255,255,0.12)" }}>★</span>)} <span style={{ color: "#C9A84C", fontWeight: 700 }}>{value}/5</span></span>
-                                    : Array.isArray(value) ? value.join(", ")
-                                    : String(value)}
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
+                  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                    <span style={{ fontSize: 12, color: "#4A5A72" }}>{new Date(a.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</span>
+                    <span style={{ color: "#C9A84C", fontSize: 16 }}>{isExpanded ? "▲" : "▼"}</span>
                   </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      )}
+                </div>
+                {isExpanded && (
+                  <div style={{ padding: "0 24px 24px", borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+                    <div style={{ marginTop: 16, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                      {Object.entries(a.data || {}).map(([key, value]) => {
+                        if (!value || (Array.isArray(value) && value.length === 0)) return null;
+                        const label = key.replace(/_/g, " ").replace(/\w/g, l => l.toUpperCase());
+                        return (
+                          <div key={key} style={{ background: "rgba(255,255,255,0.03)", borderRadius: 10, padding: "12px 14px" }}>
+                            <div style={{ fontSize: 10, color: "#C9A84C", fontWeight: 600, letterSpacing: .8, textTransform: "uppercase", marginBottom: 6 }}>{label}</div>
+                            <div style={{ fontSize: 13, color: "#F0EBE0", lineHeight: 1.6 }}>
+                              {typeof value === "number" ? `${"★".repeat(value)}${"☆".repeat(5 - value)} (${value}/5)` : Array.isArray(value) ? value.join(", ") : String(value)}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>}
     </div>
   );
 }
@@ -5959,8 +5895,7 @@ function ParticipantAnnouncements() {
 
 // ── Compose & Manage Announcements (INJAZ Team + Trainer) ─────
 function ComposeAnnouncements({ senderRole = "injaz" }) {
-  const { profile, session } = useAuth();
-  const { showSuccess, showError } = useAuth();
+  const { profile, session, showSuccess, showError } = useAuth();
   const [announcements, setAnnouncements] = useState([]);
   const [loading, setLoading] = useState(true);
   const [composing, setComposing] = useState(false);
@@ -5980,7 +5915,6 @@ function ComposeAnnouncements({ senderRole = "injaz" }) {
   const handlePost = async () => {
     if (!form.title.trim() || !form.body.trim()) { showError("Please fill title and message."); return; }
     setPosting(true);
-    await new Promise(r => setTimeout(r, 0)); // yield to browser
     try {
       await db.createAnnouncement({
         title: form.title,
@@ -5996,7 +5930,7 @@ function ComposeAnnouncements({ senderRole = "injaz" }) {
       setComposing(false);
       await load();
       showSuccess("Announcement posted!");
-    } catch (e) { showError(e.message || "Submission failed. Please try again."); }
+    } catch (e) { showError(e?.message || "Submission failed. Please try again."); }
     finally { setPosting(false); }
   };
 
@@ -6006,7 +5940,7 @@ function ComposeAnnouncements({ senderRole = "injaz" }) {
       await db.deleteAnnouncement(id);
       setAnnouncements(prev => prev.filter(a => a.id !== id));
       showSuccess("Deleted.");
-    } catch (e) { showError(e.message || "Submission failed. Please try again."); }
+    } catch (e) { showError(e?.message || "Submission failed. Please try again."); }
     finally { setDeleting(null); }
   };
 
@@ -6138,26 +6072,12 @@ function ComposeAnnouncements({ senderRole = "injaz" }) {
 }
 
 // ── Notification Bell (unread count) for nav ─────────────────
-function useUnreadAnnouncements(session) {
-  const [count, setCount] = useState(0);
-  useEffect(() => {
-    if (!session?.user?.id) return;
-    (async () => {
-      const [anns, reads] = await Promise.all([
-        db.getAnnouncements(),
-        db.getReadAnnouncements(session.user.id),
-      ]);
-      setCount(anns.filter(a => !reads.includes(a.id)).length);
-    })();
-  }, [session?.user?.id]);
-  return count;
-}
+
 
 
 // ── Invite Management (INJAZ Team only) ──────────────────────
 function InviteManagement() {
-  const { session } = useAuth();
-  const { showSuccess, showError } = useAuth();
+  const { session, showSuccess, showError } = useAuth();
   const [invites, setInvites] = useState([]);
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState({ email: "", role: "seeker", full_name: "", note: "" });
@@ -6186,7 +6106,7 @@ function InviteManagement() {
       setForm({ email: "", role: "seeker", full_name: "", note: "" });
       await load();
       showSuccess("Invite created! Share the platform link with them.");
-    } catch (e) { showError(e.message || "Submission failed. Please try again."); }
+    } catch (e) { showError(e?.message || "Submission failed. Please try again."); }
     finally { setSending(false); }
   };
 
@@ -6336,168 +6256,6 @@ function InviteManagement() {
   );
 }
 
-// ── PageHeader ────────────────────────────────────────────────
-function PageHeader({ title, subtitle, action }) {
-  return (
-    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 28 }}>
-      <div>
-        <h1 style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 24, fontWeight: 700, color: "#F0EBE0", marginBottom: 4 }}>{title}</h1>
-        {subtitle && <p style={{ color: "#8A9BB5", fontSize: 14 }}>{subtitle}</p>}
-      </div>
-      {action && <div style={{ flexShrink: 0, marginLeft: 16 }}>{action}</div>}
-    </div>
-  );
-}
-
-// ── Shell (sidebar layout) ────────────────────────────────────
-function Shell({ navItems, userLabel, userSub, accentColor = C.primary, children, activePage, setActivePage, session, role }) {
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-
-  return (
-    <div style={{ display: "flex", minHeight: "100vh", background: "#080F1E" }}>
-      <style>{globalStyles}</style>
-
-      {sidebarOpen && <div className="mobile-overlay" onClick={() => setSidebarOpen(false)} />}
-
-      {/* Sidebar */}
-      <div className={"sidebar" + (sidebarOpen ? " open" : "")} style={{
-        width: 230, flexShrink: 0, background: "rgba(10,18,32,0.97)",
-        borderRight: "1px solid rgba(201,168,76,0.12)", display: "flex",
-        flexDirection: "column", padding: "24px 12px", position: "sticky",
-        top: 0, height: "100vh", overflowY: "auto", backdropFilter: "blur(20px)", zIndex: 40,
-      }}>
-        {/* Logo */}
-        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "0 6px", marginBottom: 28 }}>
-          <div style={{ width: 36, height: 36, borderRadius: 10, background: "rgba(201,168,76,0.15)", border: "1px solid rgba(201,168,76,0.3)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, color: accentColor, fontWeight: 700 }}>I</div>
-          <div>
-            <div style={{ fontSize: 13, fontWeight: 700, color: "#F0EBE0", letterSpacing: 1 }}>INJAZ</div>
-            <div style={{ fontSize: 9, color: "#4A5A72", letterSpacing: 1.5, textTransform: "uppercase" }}>Career Platform</div>
-          </div>
-        </div>
-
-        {/* User info */}
-        <div style={{ padding: "10px", marginBottom: 20, background: "rgba(255,255,255,0.03)", borderRadius: 10, border: "1px solid rgba(255,255,255,0.06)" }}>
-          <div style={{ fontSize: 13, fontWeight: 600, color: "#F0EBE0", marginBottom: 2 }}>{userLabel}</div>
-          <div style={{ fontSize: 11, color: accentColor }}>{userSub}</div>
-        </div>
-
-        {/* Nav */}
-        <nav style={{ flex: 1, display: "flex", flexDirection: "column", gap: 2 }}>
-          {navItems.map(item => (
-            <button key={item.id} className={"nav-item" + (activePage === item.id ? " active" : "")}
-              onClick={() => { setActivePage(item.id); setSidebarOpen(false); }}
-              style={{ fontFamily: "'DM Sans',sans-serif" }}>
-              <span className="nav-icon">{item.icon}</span>
-              <span style={{ flex: 1 }}>{item.label}</span>
-              {item.badge && (
-                item.badgeType === "notif"
-                  ? <span style={{ minWidth: 18, height: 18, borderRadius: 9, background: "#C8392B", color: "#fff", fontSize: 10, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 4px" }}>{item.badge}</span>
-                  : <span style={{ fontSize: 11, background: "rgba(201,168,76,0.2)", color: "#C9A84C", borderRadius: 10, padding: "1px 7px", fontWeight: 700, border: "1px solid rgba(201,168,76,0.3)" }}>{item.badge}</span>
-              )}
-            </button>
-          ))}
-        </nav>
-
-        {/* Sign out */}
-        <button className="nav-item" onClick={async () => {
-            try { await supabase.auth.signOut(); } catch(e) { console.error("Sign out error:", e); }
-            window.location.href = window.location.origin;
-          }}
-          style={{ marginTop: 12, color: "#C8392B", fontFamily: "'DM Sans',sans-serif" }}>
-          <span className="nav-icon">&#x2192;</span> Sign Out
-        </button>
-      </div>
-
-      {/* Main */}
-      <div style={{ flex: 1, overflowX: "hidden" }}>
-        <div style={{ maxWidth: 1100, margin: "0 auto", padding: "32px 28px" }}>
-          {children}
-        </div>
-      </div>
-
-      {/* Announcement popup for participants & trainers */}
-      {session && role && role !== "injaz_team" && role !== "employer" && (
-        <AnnouncementPopupManager
-          session={session}
-          role={role}
-          onNavigateToAnnouncements={() => setActivePage("announcements")}
-        />
-      )}
-    </div>
-  );
-}
-
-// ── Announcement popup components ─────────────────────────────
-function useAnnouncementRealtime(session, role, onNew) {
-  useEffect(() => {
-    if (!supabase || !session?.user?.id || role === "injaz_team") return;
-    const channel = supabase
-      .channel("announcements-realtime")
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "announcements" }, (payload) => {
-        const ann = payload.new;
-        const isForMe =
-          ann.target_role === "all" ||
-          (role === "seeker" && (ann.target_role === "seeker" || ann.target_role === "all")) ||
-          (role === "trainer" && (ann.target_role === "trainer" || ann.target_role === "all"));
-        if (isForMe) onNew(ann);
-      })
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
-  }, [session?.user?.id, role]);
-}
-
-function AnnouncementPopup({ ann, onClose, onView }) {
-  const [hiding, setHiding] = useState(false);
-  const DURATION = 8000;
-  useEffect(() => {
-    const t = setTimeout(() => { setHiding(true); setTimeout(onClose, 320); }, DURATION);
-    return () => clearTimeout(t);
-  }, []);
-  const dismiss = () => { setHiding(true); setTimeout(onClose, 320); };
-  return (
-    <div style={{
-      position: "fixed", bottom: 80, right: 24, width: 340, maxWidth: "calc(100vw - 48px)",
-      background: "rgba(10,21,37,0.97)", border: "1px solid rgba(201,168,76,0.4)",
-      borderRadius: 14, boxShadow: "0 20px 60px rgba(0,0,0,0.7)", backdropFilter: "blur(24px)",
-      zIndex: 9999, overflow: "hidden",
-      animation: hiding ? "slideOutRight .3s ease forwards" : "slideInRight .4s cubic-bezier(.22,1,.36,1) both",
-    }}>
-      <div style={{ height: 3, background: "linear-gradient(90deg,#C9A84C,#E8C96A)" }} />
-      <div style={{ padding: "16px 18px" }}>
-        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 10 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <div style={{ width: 36, height: 36, borderRadius: 10, background: "rgba(201,168,76,0.15)", border: "1px solid rgba(201,168,76,0.3)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>◆</div>
-            <div>
-              <div style={{ fontSize: 11, color: "#C9A84C", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 2 }}>New Announcement</div>
-              <div style={{ fontSize: 14, fontWeight: 700, color: "#F0EBE0", lineHeight: 1.3 }}>{ann.title}</div>
-            </div>
-          </div>
-          <button onClick={dismiss} style={{ background: "none", border: "none", color: "#4A5A72", cursor: "pointer", fontSize: 18, lineHeight: 1, padding: "2px 4px", flexShrink: 0 }}>x</button>
-        </div>
-        <p style={{ fontSize: 13, color: "#8A9BB5", margin: "0 0 14px 46px", lineHeight: 1.5 }}>{ann.body}</p>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginLeft: 46 }}>
-          <span style={{ fontSize: 11, color: "#4A5A72" }}>By {ann.sender_name || "INJAZ Team"}</span>
-          <button onClick={() => { onView(); dismiss(); }} style={{ fontSize: 12, fontWeight: 600, color: "#C9A84C", background: "rgba(201,168,76,0.1)", border: "1px solid rgba(201,168,76,0.25)", borderRadius: 8, padding: "5px 12px", cursor: "pointer" }}>View</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function AnnouncementPopupManager({ session, role, onNavigateToAnnouncements }) {
-  const [queue, setQueue] = useState([]);
-  useAnnouncementRealtime(session, role, (ann) => {
-    setQueue(prev => [...prev, { ...ann, _key: Date.now() + Math.random() }]);
-  });
-  const remove = (key) => setQueue(prev => prev.filter(a => a._key !== key));
-  const current = queue[queue.length - 1];
-  if (!current) return null;
-  return <AnnouncementPopup key={current._key} ann={current} onClose={() => remove(current._key)} onView={onNavigateToAnnouncements} />;
-}
-
-
-
-
 export default function App() {
   const [session, setSession] = useState(undefined);
   const [profile, setProfile] = useState(null);
@@ -6505,6 +6263,7 @@ export default function App() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [activePage, setActivePage] = useState("dashboard");
   const { toast, showSuccess, showError, showInfo } = useToast();
+  const unreadAnns = useUnreadAnnouncements(session); // must be top-level
 
   if (!supabase) return <SetupError />;
 
@@ -6616,7 +6375,7 @@ export default function App() {
       { id: "insights", icon: "◑", label: "Market Insights" },
       { id: "checkpoints", icon: "◉", label: "My Checkpoints" },
       { id: "attendance", icon: "≡", label: "My Attendance" },
-      { id: "announcements", icon: "◆", label: "Announcements" },
+      { id: "announcements", icon: "◆", label: "Announcements", badge: unreadAnns > 0 ? unreadAnns : undefined, badgeType: "notif" },
       { id: "assessments", icon: "◈", label: "Assessments" },
       ...(isAdmin ? [{ id: "admin", icon: "✦", label: "Admin Panel" }, { id: "admin-journey", icon: "⊕", label: "Journey Overview" }] : []),
     ];
@@ -6638,7 +6397,7 @@ export default function App() {
     };
     return (
       <AuthCtx.Provider value={{ session, profile, setProfile, role, isAdmin, showSuccess, showError, showInfo }}>
-        <Shell navItems={navItems} userLabel={profile?.full_name || "Participant"} userSub={isAdmin ? "Admin Access" : `Profile ${profile?.profile_score || 20}% complete`} activePage={activePage} setActivePage={setActivePage}>
+        <Shell navItems={navItems} userLabel={profile?.full_name || "Participant"} userSub={isAdmin ? "Admin Access" : `Profile ${profile?.profile_score || 20}% complete`} activePage={activePage} setActivePage={setActivePage} session={session} role={role}>
           {pages[activePage] || pages.dashboard}
         </Shell>
         <Toast toast={toast} />
@@ -6680,7 +6439,7 @@ export default function App() {
       { id: "journey-overview", icon: "◐", label: "Journey Overview" },
       { id: "checkpoints", icon: "◉", label: "Intersection Checkpoints" },
       { id: "attendance", icon: "≡", label: "Attendance" },
-      { id: "announcements", icon: "◆", label: "Announcements" },
+      { id: "announcements", icon: "◆", label: "Announcements", badge: unreadAnns > 0 ? unreadAnns : undefined, badgeType: "notif" },
       { id: "assessments", icon: "◈", label: "Assessments" },
       ...(isAdmin ? [{ id: "admin", icon: "✦", label: "Admin Panel" }] : []),
     ];
@@ -6699,7 +6458,7 @@ export default function App() {
     const typeLabel = trainerType === "mentor" ? "Mentor" : trainerType === "both" ? "Trainer & Mentor" : "Trainer";
     return (
       <AuthCtx.Provider value={{ session, profile, setProfile, role, isAdmin, showSuccess, showError, showInfo }}>
-        <Shell navItems={trainerNav} userLabel={profile?.full_name || typeLabel} userSub={`${typeLabel} · ${profile?.org_name || "INJAZ Lebanon"}`} activePage={activePage} setActivePage={setActivePage}>
+        <Shell navItems={trainerNav} userLabel={profile?.full_name || typeLabel} userSub={`${typeLabel} · ${profile?.org_name || "INJAZ Lebanon"}`} activePage={activePage} setActivePage={setActivePage} session={session} role={role}>
           {trainerPages[activePage] || trainerPages.dashboard}
         </Shell>
         <Toast toast={toast} />
