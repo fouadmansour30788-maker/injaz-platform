@@ -1077,6 +1077,18 @@ function SeekerDashboard({ setActivePage }) {
   );
 }
 
+function PageHeader({ title, subtitle, action }) {
+  return (
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
+      <div>
+        <h1 style={{ fontSize: 24, fontWeight: 700, color: "#F0EBE0", marginBottom: 4 }}>{title}</h1>
+        <p style={{ fontSize: 13, color: "#8A9BB5" }}>{subtitle}</p>
+      </div>
+      {action && <div>{action}</div>}
+    </div>
+  );
+}
+
 // ── Seeker Profile ────────────────────────────────────────────
 function SeekerProfile() {
   const { profile, setProfile } = useAuth();
@@ -6500,7 +6512,6 @@ export default function App() {
       { id: "insights", icon: "◑", label: "Market Insights" },
       { id: "checkpoints", icon: "◉", label: "My Checkpoints" },
       { id: "attendance", icon: "≡", label: "My Attendance" },
-      { id: "announcements", icon: "◆", label: "Announcements" },
       { id: "announcements", icon: "◆", label: "Announcements" },
       { id: "assessments", icon: "◈", label: "Assessments" },
       ...(isAdmin ? [{ id: "admin", icon: "✦", label: "Admin Panel" }, { id: "admin-journey", icon: "⊕", label: "Journey Overview" }] : []),
