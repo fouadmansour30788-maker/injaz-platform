@@ -1022,8 +1022,7 @@ function SeekerDashboard({ setActivePage }) {
 
 // ── Seeker Profile ────────────────────────────────────────────
 function SeekerProfile() {
-  const { profile, setProfile } = useAuth();
-  const { showSuccess, showError } = useToast();
+  const { profile, setProfile, showSuccess, showError } = useAuth();
   const [form, setForm] = useState({
     full_name: "", phone: "", governorate: "", nationality: "Lebanese",
     employment_status: "seeking", education_level: "bachelor", years_experience: 0,
@@ -1813,7 +1812,7 @@ function PostJob() {
       showSuccess("Job posted successfully! AI matching will begin immediately.");
       setStep(1);
       setForm({ title: "", type: "full-time", work_mode: "onsite", governorate: "", sector: "", description: "", required_skills: [], min_experience_years: 0, min_education: "bachelor", openings: 1 });
-    } catch (e) { showError("Error: " + e.message); }
+    } catch (e) { showError(e.message || "Submission failed. Please try again."); }
     finally { setPosting(false); }
   };
 
@@ -3776,7 +3775,7 @@ function CheckpointManager({ isInjazTeam = false }) {
       showSuccess("Program checkpoint updated! All participants will see the new stage.");
       const d = await db.getProgramCheckpoint();
       setCheckpoint(d);
-    } catch (e) { showError("Error: " + e.message); }
+    } catch (e) { showError(e.message || "Submission failed. Please try again."); }
     finally { setSaving(false); }
   };
 
@@ -3936,7 +3935,7 @@ function MyAttendance() {
         setReflectionSession({ ...added });
         setShowReflection(true);
       }
-    } catch (e) { showError("Error: " + e.message); }
+    } catch (e) { showError(e.message || "Submission failed. Please try again."); }
     finally { setAdding(false); }
   };
 
@@ -3946,7 +3945,7 @@ function MyAttendance() {
       await db.deleteAttendanceSession(id);
       setSessions(s => s.filter(x => x.id !== id));
       showSuccess("Session removed.");
-    } catch (e) { showError("Error: " + e.message); }
+    } catch (e) { showError(e.message || "Submission failed. Please try again."); }
     finally { setDeleting(null); }
   };
 
@@ -4281,7 +4280,7 @@ function AttendanceVerification({ isInjazTeam = false }) {
       await db.verifyAttendanceSession(id, session?.user?.id);
       setAllSessions(prev => prev.map(s => s.id === id ? { ...s, verified: true } : s));
       showSuccess("Session verified!");
-    } catch (e) { showError("Error: " + e.message); }
+    } catch (e) { showError(e.message || "Submission failed. Please try again."); }
     finally { setVerifying(null); }
   };
 
@@ -4484,8 +4483,7 @@ function AttendanceVerification({ isInjazTeam = false }) {
 
 // ── Mentorship Session Reflection Card Modal ──────────────────
 function ReflectionCardModal({ session, sessionNumber, onClose, onSave }) {
-  const { profile } = useAuth();
-  const { showSuccess, showError } = useToast();
+  const { profile, showSuccess, showError } = useAuth();
   const [saving, setSaving] = useState(false);
   const [rating, setRating] = useState(0);
   const [hoveredRating, setHoveredRating] = useState(0);
@@ -4517,7 +4515,7 @@ function ReflectionCardModal({ session, sessionNumber, onClose, onSave }) {
       showSuccess("Reflection card saved!");
       onSave();
       onClose();
-    } catch (e) { showError("Error: " + e.message); }
+    } catch (e) { showError(e.message || "Submission failed. Please try again."); }
     finally { setSaving(false); }
   };
 
@@ -4983,8 +4981,7 @@ function MyAssessments() {
 
 // ── Mentee First Meeting Form ─────────────────────────────────
 function MenteeFirstMeetingForm({ onBack, onSubmit }) {
-  const { profile } = useAuth();
-  const { showSuccess, showError } = useToast();
+  const { profile, showSuccess, showError } = useAuth();
   const [saving, setSaving] = useState(false);
   const [f, setF] = useState({
     edition: "intersection_5", mentor_name: "", phone: "", field_of_study: "", university: "",
@@ -4996,13 +4993,25 @@ function MenteeFirstMeetingForm({ onBack, onSubmit }) {
   const set = (k, v) => setF(p => ({ ...p, [k]: v }));
 
   const handleSubmit = async () => {
-    if (!f.mentor_name || !f.had_first_meeting) { showError("Please fill required fields."); return; }
+    if (!f.mentor_name) { showError("Please enter your mentor's name."); return; }
+    if (!f.had_first_meeting) { showError("Please answer whether you had your first meeting."); return; }
+    if (f.had_first_meeting === "yes") {
+      if (!f.first_meeting_date) { showError("Please enter the date of your first meeting."); return; }
+      if (!f.mentor_encouraging) { showError("Please answer whether your mentor was encouraging."); return; }
+      if (!f.meeting_description) { showError("Please describe your first meeting."); return; }
+      if (!f.agreed_on_frequency) { showError("Please answer whether you agreed on meeting frequency."); return; }
+      if (!f.greatest_strengths) { showError("Please fill in your greatest strengths."); return; }
+      if (!f.major_challenges) { showError("Please fill in your major challenges."); return; }
+      if (!f.career_goals) { showError("Please fill in your career goals."); return; }
+      if (!f.areas_of_support) { showError("Please fill in the areas you need support in."); return; }
+    }
     setSaving(true);
+    const withTimeout = (p) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error("Request timed out — check your connection")), 15000))]);
     try {
-      await db.saveAssessment({ seeker_id: profile.id, form_type: "mentee_first_meeting", data: f });
+      await withTimeout(db.saveAssessment({ seeker_id: profile.id, form_type: "mentee_first_meeting", data: f }));
       showSuccess("Assessment submitted! Thank you.");
       onSubmit();
-    } catch (e) { showError("Error: " + e.message); }
+    } catch (e) { showError(e.message || "Submission failed. Please try again."); }
     finally { setSaving(false); }
   };
 
@@ -5102,8 +5111,7 @@ function MenteeFirstMeetingForm({ onBack, onSubmit }) {
 
 // ── Mentee Mid-Program Form ────────────────────────────────────
 function MenteeMidProgramForm({ onBack, onSubmit }) {
-  const { profile } = useAuth();
-  const { showSuccess, showError } = useToast();
+  const { profile, showSuccess, showError } = useAuth();
   const [saving, setSaving] = useState(false);
   const [f, setF] = useState({
     field_of_study_update: "", university_update: "", employer_update: "", job_title_update: "",
@@ -5121,10 +5129,10 @@ function MenteeMidProgramForm({ onBack, onSubmit }) {
     if (!f.num_meetings || !f.avg_meeting_duration) { showError("Please fill required fields."); return; }
     setSaving(true);
     try {
-      await db.saveAssessment({ seeker_id: profile.id, form_type: "mentee_mid_program", data: f });
+      await Promise.race([db.saveAssessment({ seeker_id: profile.id, form_type: "mentee_mid_program", data: f }), new Promise((_, rej) => setTimeout(() => rej(new Error("Timed out")), 15000))]);
       showSuccess("Mid-program assessment submitted! Thank you.");
       onSubmit();
-    } catch (e) { showError("Error: " + e.message); }
+    } catch (e) { showError(e.message || "Submission failed. Please try again."); }
     finally { setSaving(false); }
   };
 
@@ -5210,8 +5218,7 @@ function MenteeMidProgramForm({ onBack, onSubmit }) {
 
 // ── Mentee Final Assessment Form ──────────────────────────────
 function MenteeFinalForm({ onBack, onSubmit }) {
-  const { profile } = useAuth();
-  const { showSuccess, showError } = useToast();
+  const { profile, showSuccess, showError } = useAuth();
   const [saving, setSaving] = useState(false);
   const [f, setF] = useState({
     grad_program: "", field_of_study: "", university: "", job_position: "", company: "",
@@ -5227,10 +5234,10 @@ function MenteeFinalForm({ onBack, onSubmit }) {
     if (!f.testimonial || !f.would_recommend) { showError("Please fill the required fields."); return; }
     setSaving(true);
     try {
-      await db.saveAssessment({ seeker_id: profile.id, form_type: "mentee_final", data: f });
+      await Promise.race([db.saveAssessment({ seeker_id: profile.id, form_type: "mentee_final", data: f }), new Promise((_, rej) => setTimeout(() => rej(new Error("Timed out")), 15000))]);
       showSuccess("Final assessment submitted! Thank you for your journey with us.");
       onSubmit();
-    } catch (e) { showError("Error: " + e.message); }
+    } catch (e) { showError(e.message || "Submission failed. Please try again."); }
     finally { setSaving(false); }
   };
 
@@ -5377,8 +5384,7 @@ function TrainerAssessments() {
 
 // ── Mentor First Meeting Form ─────────────────────────────────
 function MentorFirstMeetingForm({ onBack, onSubmit }) {
-  const { profile } = useAuth();
-  const { showSuccess, showError } = useToast();
+  const { profile, showSuccess, showError } = useAuth();
   const [saving, setSaving] = useState(false);
   const [f, setF] = useState({
     mentee_name: "", had_first_meeting: "yes",
@@ -5393,10 +5399,10 @@ function MentorFirstMeetingForm({ onBack, onSubmit }) {
     if (!f.mentee_name) { showError("Please fill required fields."); return; }
     setSaving(true);
     try {
-      await db.saveAssessment({ trainer_id: profile.id, form_type: "mentor_first_meeting", data: f });
+      await Promise.race([db.saveAssessment({ trainer_id: profile.id, form_type: "mentor_first_meeting", data: f }), new Promise((_, rej) => setTimeout(() => rej(new Error("Timed out")), 15000))]);
       showSuccess("Assessment submitted! Thank you.");
       onSubmit();
-    } catch (e) { showError("Error: " + e.message); }
+    } catch (e) { showError(e.message || "Submission failed. Please try again."); }
     finally { setSaving(false); }
   };
 
@@ -5476,8 +5482,7 @@ function MentorFirstMeetingForm({ onBack, onSubmit }) {
 
 // ── Mentor Final Assessment Form ──────────────────────────────
 function MentorFinalForm({ onBack, onSubmit }) {
-  const { profile } = useAuth();
-  const { showSuccess, showError } = useToast();
+  const { profile, showSuccess, showError } = useAuth();
   const [saving, setSaving] = useState(false);
   const [f, setF] = useState({
     field_of_work: "", job_title_company: "",
@@ -5494,10 +5499,10 @@ function MentorFinalForm({ onBack, onSubmit }) {
     if (!f.testimonial || !f.mentor_next_edition) { showError("Please fill required fields."); return; }
     setSaving(true);
     try {
-      await db.saveAssessment({ trainer_id: profile.id, form_type: "mentor_final", data: f });
+      await Promise.race([db.saveAssessment({ trainer_id: profile.id, form_type: "mentor_final", data: f }), new Promise((_, rej) => setTimeout(() => rej(new Error("Timed out")), 15000))]);
       showSuccess("Final assessment submitted! Thank you for your incredible contribution.");
       onSubmit();
-    } catch (e) { showError("Error: " + e.message); }
+    } catch (e) { showError(e.message || "Submission failed. Please try again."); }
     finally { setSaving(false); }
   };
 
@@ -5964,7 +5969,7 @@ function ParticipantAnnouncements() {
 // ── Compose & Manage Announcements (INJAZ Team + Trainer) ─────
 function ComposeAnnouncements({ senderRole = "injaz" }) {
   const { profile, session } = useAuth();
-  const { showSuccess, showError } = useToast();
+  const { showSuccess, showError } = useAuth();
   const [announcements, setAnnouncements] = useState([]);
   const [loading, setLoading] = useState(true);
   const [composing, setComposing] = useState(false);
@@ -5999,7 +6004,7 @@ function ComposeAnnouncements({ senderRole = "injaz" }) {
       setComposing(false);
       await load();
       showSuccess("Announcement posted!");
-    } catch (e) { showError("Error: " + e.message); }
+    } catch (e) { showError(e.message || "Submission failed. Please try again."); }
     finally { setPosting(false); }
   };
 
@@ -6009,7 +6014,7 @@ function ComposeAnnouncements({ senderRole = "injaz" }) {
       await db.deleteAnnouncement(id);
       setAnnouncements(prev => prev.filter(a => a.id !== id));
       showSuccess("Deleted.");
-    } catch (e) { showError("Error: " + e.message); }
+    } catch (e) { showError(e.message || "Submission failed. Please try again."); }
     finally { setDeleting(null); }
   };
 
@@ -6160,7 +6165,7 @@ function useUnreadAnnouncements(session) {
 // ── Invite Management (INJAZ Team only) ──────────────────────
 function InviteManagement() {
   const { session } = useAuth();
-  const { showSuccess, showError } = useToast();
+  const { showSuccess, showError } = useAuth();
   const [invites, setInvites] = useState([]);
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState({ email: "", role: "seeker", full_name: "", note: "" });
@@ -6189,7 +6194,7 @@ function InviteManagement() {
       setForm({ email: "", role: "seeker", full_name: "", note: "" });
       await load();
       showSuccess("Invite created! Share the platform link with them.");
-    } catch (e) { showError("Error: " + e.message); }
+    } catch (e) { showError(e.message || "Submission failed. Please try again."); }
     finally { setSending(false); }
   };
 
