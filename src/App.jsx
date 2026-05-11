@@ -1063,6 +1063,7 @@ function SeekerProfile() {
       return;
     }
     setSaving(true);
+    await new Promise(r => setTimeout(r, 0)); // yield to browser
     try {
       const score = computeScore(form, skills);
       await db.updateSeekerProfile(profile.id, { ...form, years_experience: parseInt(form.years_experience) || 0, profile_score: score });
@@ -1081,6 +1082,7 @@ function SeekerProfile() {
   const handleCVUpload = async (file) => {
     if (!file || !profile) return;
     setCvUploading(true);
+    await new Promise(r => setTimeout(r, 0)); // yield to browser
     try {
       const text = await file.text().catch(() => file.name);
       let review;
@@ -1242,6 +1244,7 @@ function JobMatches() {
   const handleApply = async (job) => {
     if (!profile) return;
     setApplying(true);
+    await new Promise(r => setTimeout(r, 0)); // yield to browser
     try {
       await db.applyToJob(profile.id, job.id, "");
       showSuccess("Application submitted!");
@@ -1548,6 +1551,7 @@ function JourneyTracker() {
     const newIndex = JOURNEY_STAGES.findIndex(s => s.id === stageId);
     if (newIndex <= stageIndex) return;
     setSaving(true);
+    await new Promise(r => setTimeout(r, 0)); // yield to browser
     try {
       const newData = { ...journeyData, [stageId]: { completed_at: new Date().toISOString() } };
       await db.updateJourney(profile.id, stageId, newData);
@@ -1807,6 +1811,7 @@ function PostJob() {
   const publish = async () => {
     if (!profile?.id) { showError("Employer profile not found."); return; }
     setPosting(true);
+    await new Promise(r => setTimeout(r, 0)); // yield to browser
     try {
       await db.createPosting({ ...form, employer_id: profile.id, status: "active", required_skills: form.required_skills });
       showSuccess("Job posted successfully! AI matching will begin immediately.");
@@ -2270,6 +2275,7 @@ function TrainerProfile() {
   const handleSave = async () => {
     if (!profile) return;
     setSaving(true);
+    await new Promise(r => setTimeout(r, 0)); // yield to browser
     try {
       const score = computeScore(form);
       await db.updateTrainerProfile(profile.id, { ...form, years_experience: parseInt(form.years_experience) || 0, profile_score: score });
@@ -3597,6 +3603,7 @@ function InjazProfile() {
   const handleSave = async () => {
     if (!profile) return;
     setSaving(true);
+    await new Promise(r => setTimeout(r, 0)); // yield to browser
     try {
       await db.updateInjazTeamProfile(profile.id, form);
       setProfile(p => ({ ...p, ...form }));
@@ -3770,6 +3777,7 @@ function CheckpointManager({ isInjazTeam = false }) {
 
   const handleSave = async () => {
     setSaving(true);
+    await new Promise(r => setTimeout(r, 0)); // yield to browser
     try {
       await db.updateProgramCheckpoint(form.checkpoint, form.status, form.note);
       showSuccess("Program checkpoint updated! All participants will see the new stage.");
@@ -3915,6 +3923,7 @@ function MyAttendance() {
       return;
     }
     setAdding(true);
+    await new Promise(r => setTimeout(r, 0)); // yield to browser
     try {
       const added = await db.addAttendanceSession({
         seeker_id: profile.id,
@@ -4500,6 +4509,7 @@ function ReflectionCardModal({ session, sessionNumber, onClose, onSave }) {
   const handleSave = async () => {
     if (!rating) { showError("Please add a session rating."); return; }
     setSaving(true);
+    await new Promise(r => setTimeout(r, 0));
     try {
       await db.saveReflection({
         seeker_id: profile.id,
@@ -4662,15 +4672,27 @@ function StarRating({ value, onChange, max = 5, labels = [] }) {
 function RadioGroup({ options, value, onChange }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-      {options.map(opt => (
-        <label key={opt.value || opt} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 14px", borderRadius: 10, border: `1px solid ${value === (opt.value || opt) ? "rgba(201,168,76,0.4)" : "rgba(255,255,255,0.08)"}`, background: value === (opt.value || opt) ? "rgba(201,168,76,0.08)" : "rgba(255,255,255,0.02)", cursor: "pointer", transition: "all .2s" }}>
-          <div style={{ width: 16, height: 16, borderRadius: "50%", border: `2px solid ${value === (opt.value || opt) ? "#C9A84C" : "rgba(255,255,255,0.2)"}`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-            {value === (opt.value || opt) && <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#C9A84C" }} />}
-          </div>
-          <input type="radio" value={opt.value || opt} checked={value === (opt.value || opt)} onChange={() => onChange(opt.value || opt)} style={{ display: "none" }} />
-          <span style={{ fontSize: 13, color: value === (opt.value || opt) ? "#C9A84C" : "#F0EBE0" }}>{opt.label || opt}</span>
-        </label>
-      ))}
+      {options.map(opt => {
+        const val = opt.value || opt;
+        const label = opt.label || opt;
+        const selected = value === val;
+        return (
+          <button key={val} type="button"
+            onClick={() => onChange(val)}
+            style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 14px", borderRadius: 10,
+              border: `1px solid ${selected ? "rgba(201,168,76,0.4)" : "rgba(255,255,255,0.08)"}`,
+              background: selected ? "rgba(201,168,76,0.08)" : "rgba(255,255,255,0.02)",
+              cursor: "pointer", transition: "border .15s, background .15s",
+              width: "100%", textAlign: "left", fontFamily: "'DM Sans',sans-serif" }}>
+            <div style={{ width: 16, height: 16, borderRadius: "50%", flexShrink: 0,
+              border: `2px solid ${selected ? "#C9A84C" : "rgba(255,255,255,0.2)"}`,
+              display: "flex", alignItems: "center", justifyContent: "center" }}>
+              {selected && <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#C9A84C" }} />}
+            </div>
+            <span style={{ fontSize: 13, color: selected ? "#C9A84C" : "#F0EBE0" }}>{label}</span>
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -5006,6 +5028,9 @@ function MenteeFirstMeetingForm({ onBack, onSubmit }) {
       if (!f.areas_of_support) { showError("Please fill in the areas you need support in."); return; }
     }
     setSaving(true);
+    await new Promise(r => setTimeout(r, 0)); // yield to browser
+    // yield to browser paint before async work (fixes INP)
+    await new Promise(r => setTimeout(r, 0));
     const withTimeout = (p) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error("Request timed out — check your connection")), 15000))]);
     try {
       await withTimeout(db.saveAssessment({ seeker_id: profile.id, form_type: "mentee_first_meeting", data: f }));
@@ -5128,6 +5153,7 @@ function MenteeMidProgramForm({ onBack, onSubmit }) {
   const handleSubmit = async () => {
     if (!f.num_meetings || !f.avg_meeting_duration) { showError("Please fill required fields."); return; }
     setSaving(true);
+    await new Promise(r => setTimeout(r, 0));
     try {
       await Promise.race([db.saveAssessment({ seeker_id: profile.id, form_type: "mentee_mid_program", data: f }), new Promise((_, rej) => setTimeout(() => rej(new Error("Timed out")), 15000))]);
       showSuccess("Mid-program assessment submitted! Thank you.");
@@ -5233,6 +5259,7 @@ function MenteeFinalForm({ onBack, onSubmit }) {
   const handleSubmit = async () => {
     if (!f.testimonial || !f.would_recommend) { showError("Please fill the required fields."); return; }
     setSaving(true);
+    await new Promise(r => setTimeout(r, 0));
     try {
       await Promise.race([db.saveAssessment({ seeker_id: profile.id, form_type: "mentee_final", data: f }), new Promise((_, rej) => setTimeout(() => rej(new Error("Timed out")), 15000))]);
       showSuccess("Final assessment submitted! Thank you for your journey with us.");
@@ -5398,6 +5425,7 @@ function MentorFirstMeetingForm({ onBack, onSubmit }) {
   const handleSubmit = async () => {
     if (!f.mentee_name) { showError("Please fill required fields."); return; }
     setSaving(true);
+    await new Promise(r => setTimeout(r, 0));
     try {
       await Promise.race([db.saveAssessment({ trainer_id: profile.id, form_type: "mentor_first_meeting", data: f }), new Promise((_, rej) => setTimeout(() => rej(new Error("Timed out")), 15000))]);
       showSuccess("Assessment submitted! Thank you.");
@@ -5498,6 +5526,7 @@ function MentorFinalForm({ onBack, onSubmit }) {
   const handleSubmit = async () => {
     if (!f.testimonial || !f.mentor_next_edition) { showError("Please fill required fields."); return; }
     setSaving(true);
+    await new Promise(r => setTimeout(r, 0));
     try {
       await Promise.race([db.saveAssessment({ trainer_id: profile.id, form_type: "mentor_final", data: f }), new Promise((_, rej) => setTimeout(() => rej(new Error("Timed out")), 15000))]);
       showSuccess("Final assessment submitted! Thank you for your incredible contribution.");
@@ -5989,6 +6018,7 @@ function ComposeAnnouncements({ senderRole = "injaz" }) {
   const handlePost = async () => {
     if (!form.title.trim() || !form.body.trim()) { showError("Please fill title and message."); return; }
     setPosting(true);
+    await new Promise(r => setTimeout(r, 0)); // yield to browser
     try {
       await db.createAnnouncement({
         title: form.title,
@@ -6679,7 +6709,10 @@ function Shell({ navItems, userLabel, userSub, accentColor = C.primary, children
         </nav>
 
         {/* Sign out */}
-        <button className="nav-item" onClick={async () => { await supabase.auth.signOut(); window.location.reload(); }}
+        <button className="nav-item" onClick={async () => {
+            try { await supabase.auth.signOut(); } catch(e) { console.error("Sign out error:", e); }
+            window.location.href = window.location.origin;
+          }}
           style={{ marginTop: 12, color: "#C8392B", fontFamily: "'DM Sans',sans-serif" }}>
           <span className="nav-icon">&#x2192;</span> Sign Out
         </button>
