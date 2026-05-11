@@ -1468,9 +1468,10 @@ function CoverLetterAI() {
             <Label>Tone</Label>
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {[["formal", "◆ Formal & Professional"], ["youth", "✦ Youth-Friendly"], ["ngo", "◈ NGO-Focused"]].map(([v, l]) => (
-                <label key={v} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: C.radiusSm, border: `1px solid ${tone === v ? "rgba(201,168,76,0.5)" : "rgba(255,255,255,0.1)"}`, background: tone === v ? "rgba(201,168,76,0.12)" : "rgba(255,255,255,0.04)", cursor: "pointer", fontSize: 13, fontWeight: tone === v ? 600 : 400, color: tone === v ? "#C9A84C" : "#F0EBE0" }}>
-                  <input type="radio" value={v} checked={tone === v} onChange={() => setTone(v)} style={{ display: "none" }} />{l}
-                </label>
+                <button key={v} type="button" onClick={() => setTone(v)}
+                  style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: C.radiusSm, border: `1px solid ${tone === v ? "rgba(201,168,76,0.5)" : "rgba(255,255,255,0.1)"}`, background: tone === v ? "rgba(201,168,76,0.12)" : "rgba(255,255,255,0.04)", cursor: "pointer", fontSize: 13, fontWeight: tone === v ? 600 : 400, color: tone === v ? "#C9A84C" : "#F0EBE0", width: "100%", textAlign: "left", fontFamily: "'DM Sans',sans-serif" }}>
+                  {l}
+                </button>
               ))}
             </div>
           </div>
@@ -3915,15 +3916,15 @@ function CheckpointManager({ isInjazTeam = false }) {
             <div style={{ fontSize: 11, color: "#C9A84C", letterSpacing: 2, textTransform: "uppercase", marginBottom: 20 }}>Select Active Stage</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 24 }}>
               {INTERSECTION_CHECKPOINTS.map(cp => (
-                <label key={cp.id} style={{ display: "flex", alignItems: "center", gap: 16, padding: "16px 20px", borderRadius: 12, border: `1px solid ${form.checkpoint === cp.id ? cp.color + "66" : "rgba(255,255,255,0.08)"}`, background: form.checkpoint === cp.id ? cp.colorLight : "rgba(255,255,255,0.02)", cursor: "pointer", transition: "all .2s" }}>
-                  <input type="radio" value={cp.id} checked={form.checkpoint === cp.id} onChange={() => setForm(f => ({ ...f, checkpoint: cp.id }))} style={{ display: "none" }} />
+                <button key={cp.id} type="button" onClick={() => setForm(f => ({ ...f, checkpoint: cp.id }))}
+                  style={{ display: "flex", alignItems: "center", gap: 16, padding: "16px 20px", borderRadius: 12, border: `1px solid ${form.checkpoint === cp.id ? cp.color + "66" : "rgba(255,255,255,0.08)"}`, background: form.checkpoint === cp.id ? cp.colorLight : "rgba(255,255,255,0.02)", cursor: "pointer", transition: "all .2s", width: "100%", textAlign: "left", fontFamily: "'DM Sans',sans-serif" }}>
                   <div style={{ width: 36, height: 36, borderRadius: "50%", background: form.checkpoint === cp.id ? cp.color : "rgba(255,255,255,0.06)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, color: form.checkpoint === cp.id ? "#080F1E" : cp.color, flexShrink: 0, fontWeight: 700 }}>{cp.icon}</div>
                   <div style={{ flex: 1 }}>
                     <div style={{ fontWeight: 600, fontSize: 15, color: form.checkpoint === cp.id ? cp.color : "#F0EBE0", marginBottom: 2 }}>{cp.label}</div>
                     <div style={{ fontSize: 12, color: "#4A5A72" }}>{cp.period} — {cp.tasks.join(", ")}</div>
                   </div>
                   {form.checkpoint === cp.id && <span style={{ color: cp.color }}>◆</span>}
-                </label>
+                </button>
               ))}
             </div>
 
@@ -4947,11 +4948,13 @@ function RadioQuestion({ label, sub, options, value, onChange }) {
       {sub && <div style={{ fontSize: 12, color: "#8A9BB5", marginBottom: 12 }}>{sub}</div>}
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {options.map(opt => (
-          <label key={opt} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", borderRadius: 10, border: `1px solid ${value === opt ? "rgba(201,168,76,0.4)" : "rgba(255,255,255,0.08)"}`, background: value === opt ? "rgba(201,168,76,0.08)" : "rgba(255,255,255,0.02)", cursor: "pointer", transition: "all .15s" }}>
-            <input type="radio" checked={value === opt} onChange={() => onChange(opt)} style={{ display: "none" }} />
-            <div style={{ width: 16, height: 16, borderRadius: "50%", border: `2px solid ${value === opt ? "#C9A84C" : "rgba(255,255,255,0.2)"}`, background: value === opt ? "#C9A84C" : "transparent", flexShrink: 0, transition: "all .15s" }} />
+          <button key={opt} type="button" onClick={() => onChange(opt)}
+            style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", borderRadius: 10, border: `1px solid ${value === opt ? "rgba(201,168,76,0.4)" : "rgba(255,255,255,0.08)"}`, background: value === opt ? "rgba(201,168,76,0.08)" : "rgba(255,255,255,0.02)", cursor: "pointer", width: "100%", textAlign: "left", fontFamily: "'DM Sans',sans-serif", transition: "border .15s,background .15s" }}>
+            <div style={{ width: 16, height: 16, borderRadius: "50%", border: `2px solid ${value === opt ? "#C9A84C" : "rgba(255,255,255,0.2)"}`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              {value === opt && <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#C9A84C" }} />}
+            </div>
             <span style={{ fontSize: 13, color: value === opt ? "#C9A84C" : "#8A9BB5" }}>{opt}</span>
-          </label>
+          </button>
         ))}
       </div>
     </div>
@@ -5085,6 +5088,7 @@ function MenteeFirstMeetingForm({ onBack, onSubmit }) {
   const set = (k, v) => setF(p => ({ ...p, [k]: v }));
 
   const handleSubmit = async () => {
+    if (!profile?.id) { showError("Profile not loaded. Please refresh the page."); return; }
     if (!f.mentor_name || !f.had_first_meeting) { showError("Please fill required fields."); return; }
     setSaving(true);
     await new Promise(r => setTimeout(r, 0));
@@ -5211,6 +5215,7 @@ function MenteeMidProgramForm({ onBack, onSubmit }) {
 
   const handleSubmit = async () => {
     if (!f.num_meetings || !f.avg_meeting_duration) { showError("Please fill required fields."); return; }
+    if (!profile?.id) { showError("Profile not loaded. Please refresh the page."); return; }
     setSaving(true);
     await new Promise(r => setTimeout(r, 0));
     try {
@@ -5320,6 +5325,7 @@ function MenteeFinalForm({ onBack, onSubmit }) {
 
   const handleSubmit = async () => {
     if (!f.testimonial || !f.would_recommend) { showError("Please fill the required fields."); return; }
+    if (!profile?.id) { showError("Profile not loaded. Please refresh the page."); return; }
     setSaving(true);
     await new Promise(r => setTimeout(r, 0));
     try {
@@ -5489,6 +5495,7 @@ function MentorFirstMeetingForm({ onBack, onSubmit }) {
 
   const handleSubmit = async () => {
     if (!f.mentee_name) { showError("Please fill required fields."); return; }
+    if (!profile?.id) { showError("Profile not loaded. Please refresh the page."); return; }
     setSaving(true);
     await new Promise(r => setTimeout(r, 0));
     try {
@@ -5593,6 +5600,7 @@ function MentorFinalForm({ onBack, onSubmit }) {
 
   const handleSubmit = async () => {
     if (!f.testimonial || !f.mentor_next_edition) { showError("Please fill required fields."); return; }
+    if (!profile?.id) { showError("Profile not loaded. Please refresh the page."); return; }
     setSaving(true);
     await new Promise(r => setTimeout(r, 0));
     try {
