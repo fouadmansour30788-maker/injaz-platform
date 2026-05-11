@@ -4707,6 +4707,7 @@ function SeekerAssessments() {
   const [submitted, setSubmitted] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeForm, setActiveForm] = useState(null);
+  const [expanded, setExpanded] = useState(null); // which submission is expanded
 
   useEffect(() => {
     if (profile?.id) {
@@ -4714,43 +4715,18 @@ function SeekerAssessments() {
     } else setLoading(false);
   }, [profile?.id]);
 
-  const hasSubmitted = (type) => submitted.some(s => s.form_type === type);
+  const getSubmission = (type) => submitted.find(s => s.form_type === type);
+  const hasSubmitted = (type) => !!getSubmission(type);
+  const reload = () => db.getMyAssessments(profile.id, "seeker").then(setSubmitted).catch(() => {});
 
   const forms = [
-    {
-      id: "mentee_first_meeting",
-      title: "First Meeting Feedback",
-      desc: "Share your experience after your first 1-on-1 meeting with your mentor",
-      icon: "◆",
-      color: "#27AE60",
-      timing: "After 1st session",
-      locked: false,
-    },
-    {
-      id: "mentee_mid_program",
-      title: "Mid-Program Assessment",
-      desc: "Help us improve by sharing your progress at the midpoint of the program",
-      icon: "◈",
-      color: "#2980B9",
-      timing: "Mid-program",
-      locked: true,
-      lockedMsg: "This survey will be unlocked at the midpoint of the program",
-    },
-    {
-      id: "mentee_final",
-      title: "Final Program Assessment",
-      desc: "Share your overall experience and help shape the next edition",
-      icon: "★",
-      color: "#C9A84C",
-      timing: "End of program",
-      locked: true,
-      lockedMsg: "This survey will be unlocked at the end of the program",
-    },
+    { id: "mentee_first_meeting", title: "First Meeting Feedback", desc: "Share your experience after your first 1-on-1 meeting with your mentor", icon: "◆", color: "#27AE60", timing: "After 1st session", locked: false },
+    { id: "mentee_mid_program", title: "Mid-Program Assessment", desc: "Help us improve by sharing your progress at the midpoint of the program", icon: "◈", color: "#2980B9", timing: "Mid-program", locked: true, lockedMsg: "This survey will be unlocked at the midpoint of the program" },
+    { id: "mentee_final", title: "Final Program Assessment", desc: "Share your overall experience and help shape the next edition", icon: "★", color: "#C9A84C", timing: "End of program", locked: true, lockedMsg: "This survey will be unlocked at the end of the program" },
   ];
 
   // Block locked forms — only first meeting is open
-  if (activeForm === "mentee_first_meeting") return <MenteeFirstMeetingForm onBack={() => setActiveForm(null)} onSubmit={() => { setActiveForm(null); db.getMyAssessments(profile.id, "seeker").then(setSubmitted); }} />;
-  // Mid and final are locked — should not be reachable via UI, but guard here too
+  if (activeForm === "mentee_first_meeting") return <MenteeFirstMeetingForm onBack={() => setActiveForm(null)} onSubmit={() => { reload(); setActiveForm(null); }} />;
   if (activeForm === "mentee_mid_program" || activeForm === "mentee_final") { setActiveForm(null); return null; }
 
   return (
@@ -4761,54 +4737,92 @@ function SeekerAssessments() {
         <p style={{ color: "#8A9BB5", fontSize: 14 }}>Program feedback forms — only for 1-on-1 mentorship participants</p>
       </div>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-        {forms.map(form => {
-          const submitted = hasSubmitted(form.id);
-          const isLocked = form.locked && !submitted;
-          return (
-            <div key={form.id} className="card" style={{
-              padding: 28,
-              border: submitted ? "1px solid rgba(39,174,96,0.3)" : isLocked ? "1px solid rgba(255,255,255,0.06)" : `1px solid ${form.color}22`,
-              display: "flex", justifyContent: "space-between", alignItems: "center",
-              opacity: isLocked ? 0.55 : 1,
-              transition: "all .3s",
-            }}>
-              <div style={{ display: "flex", gap: 20, alignItems: "center" }}>
-                <div style={{ width: 52, height: 52, borderRadius: "50%",
-                  background: isLocked ? "rgba(255,255,255,0.04)" : `${form.color}22`,
-                  border: `1px solid ${isLocked ? "rgba(255,255,255,0.1)" : form.color + "44"}`,
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  fontSize: 22, color: isLocked ? "#4A5A72" : form.color, flexShrink: 0
-                }}>
-                  {isLocked ? "🔒" : form.icon}
-                </div>
-                <div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-                    <div style={{ fontWeight: 700, fontSize: 16, color: isLocked ? "#4A5A72" : "#F0EBE0" }}>{form.title}</div>
-                    <span style={{ fontSize: 10,
-                      background: isLocked ? "rgba(255,255,255,0.04)" : `${form.color}22`,
-                      color: isLocked ? "#4A5A72" : form.color,
-                      border: `1px solid ${isLocked ? "rgba(255,255,255,0.08)" : form.color + "44"}`,
-                      borderRadius: 20, padding: "2px 8px"
-                    }}>{form.timing}</span>
-                    {isLocked && <span style={{ fontSize: 10, background: "rgba(255,255,255,0.06)", color: "#4A5A72", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 20, padding: "2px 8px" }}>Locked</span>}
+      {loading ? <div style={{ display: "flex", justifyContent: "center", padding: 60 }}><Spinner size={32} /></div>
+        : <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          {forms.map(form => {
+            const submission = getSubmission(form.id);
+            const isDone = !!submission;
+            const isLocked = form.locked && !isDone;
+            const isExpanded = expanded === form.id;
+
+            return (
+              <div key={form.id} className="card" style={{
+                padding: 0, overflow: "hidden",
+                border: isDone ? "1px solid rgba(39,174,96,0.3)" : isLocked ? "1px solid rgba(255,255,255,0.06)" : `1px solid ${form.color}22`,
+                opacity: isLocked ? 0.55 : 1,
+                transition: "all .3s",
+              }}>
+                {/* Card header row */}
+                <div style={{ padding: "22px 28px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div style={{ display: "flex", gap: 20, alignItems: "center" }}>
+                    <div style={{ width: 52, height: 52, borderRadius: "50%",
+                      background: isDone ? "rgba(39,174,96,0.12)" : isLocked ? "rgba(255,255,255,0.04)" : `${form.color}22`,
+                      border: `1px solid ${isDone ? "rgba(39,174,96,0.3)" : isLocked ? "rgba(255,255,255,0.1)" : form.color + "44"}`,
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      fontSize: 22, color: isDone ? "#4AE08A" : isLocked ? "#4A5A72" : form.color, flexShrink: 0,
+                    }}>
+                      {isDone ? "✓" : isLocked ? "🔒" : form.icon}
+                    </div>
+                    <div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                        <div style={{ fontWeight: 700, fontSize: 16, color: isLocked ? "#4A5A72" : "#F0EBE0" }}>{form.title}</div>
+                        <span style={{ fontSize: 10, background: isDone ? "rgba(39,174,96,0.12)" : isLocked ? "rgba(255,255,255,0.04)" : `${form.color}22`, color: isDone ? "#4AE08A" : isLocked ? "#4A5A72" : form.color, border: `1px solid ${isDone ? "rgba(39,174,96,0.2)" : isLocked ? "rgba(255,255,255,0.08)" : form.color + "44"}`, borderRadius: 20, padding: "2px 8px" }}>{form.timing}</span>
+                        {isLocked && <span style={{ fontSize: 10, background: "rgba(255,255,255,0.06)", color: "#4A5A72", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 20, padding: "2px 8px" }}>Locked</span>}
+                      </div>
+                      <div style={{ fontSize: 13, color: "#8A9BB5" }}>
+                        {isDone
+                          ? `Submitted ${new Date(submission.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}`
+                          : isLocked ? form.lockedMsg : form.desc}
+                      </div>
+                    </div>
                   </div>
-                  <div style={{ fontSize: 13, color: "#8A9BB5" }}>
-                    {isLocked ? form.lockedMsg : form.desc}
+
+                  <div style={{ flexShrink: 0, marginLeft: 20, display: "flex", gap: 8, alignItems: "center" }}>
+                    {isDone ? (
+                      <>
+                        <span style={{ fontSize: 12, background: "rgba(39,174,96,0.12)", color: "#4AE08A", border: "1px solid rgba(39,174,96,0.3)", borderRadius: 20, padding: "6px 14px", fontWeight: 600 }}>✓ Submitted</span>
+                        <button onClick={() => setExpanded(isExpanded ? null : form.id)}
+                          style={{ fontSize: 12, fontWeight: 600, color: "#C9A84C", background: "rgba(201,168,76,0.08)", border: "1px solid rgba(201,168,76,0.25)", borderRadius: 20, padding: "6px 14px", cursor: "pointer", fontFamily: "'DM Sans',sans-serif" }}>
+                          {isExpanded ? "Hide ▲" : "View ▼"}
+                        </button>
+                      </>
+                    ) : isLocked ? (
+                      <span style={{ fontSize: 12, background: "rgba(255,255,255,0.04)", color: "#4A5A72", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 20, padding: "6px 14px" }}>Not yet available</span>
+                    ) : (
+                      <button className="btn-primary" style={{ fontSize: 13 }} onClick={() => setActiveForm(form.id)}>Fill Form →</button>
+                    )}
                   </div>
                 </div>
+
+                {/* Expanded submission view */}
+                {isDone && isExpanded && submission?.data && (
+                  <div style={{ borderTop: "1px solid rgba(39,174,96,0.15)", padding: "20px 28px 28px" }}>
+                    <div style={{ fontSize: 11, color: "#4AE08A", fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", marginBottom: 16 }}>◈ Your Submission</div>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                      {Object.entries(submission.data).map(([key, value]) => {
+                        if (value === null || value === undefined || value === "" || (Array.isArray(value) && value.length === 0)) return null;
+                        const label = key.replace(/_/g, " ").replace(/\w/g, l => l.toUpperCase());
+                        const isLong = typeof value === "string" && value.length > 55;
+                        const isNum = typeof value === "number";
+                        return (
+                          <div key={key} style={{ background: "rgba(39,174,96,0.04)", border: "1px solid rgba(39,174,96,0.12)", borderRadius: 10, padding: "12px 14px", gridColumn: isLong ? "1 / -1" : "auto" }}>
+                            <div style={{ fontSize: 10, color: "#C9A84C", fontWeight: 700, letterSpacing: 0.8, textTransform: "uppercase", marginBottom: 6 }}>{label}</div>
+                            <div style={{ fontSize: 13, color: "#F0EBE0", lineHeight: 1.6 }}>
+                              {isNum
+                                ? <span>{[1,2,3,4,5].map(s => <span key={s} style={{ color: s <= value ? "#C9A84C" : "rgba(255,255,255,0.15)" }}>★</span>)} <span style={{ color: "#C9A84C", fontWeight: 700, marginLeft: 4 }}>{value}/5</span></span>
+                                : Array.isArray(value) ? value.join(", ")
+                                : String(value)}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
-              <div style={{ flexShrink: 0, marginLeft: 20 }}>
-                {submitted
-                  ? <span style={{ fontSize: 13, background: "rgba(39,174,96,0.12)", color: "#4AE08A", border: "1px solid rgba(39,174,96,0.3)", borderRadius: 20, padding: "6px 16px", fontWeight: 600 }}>✓ Submitted</span>
-                  : isLocked
-                  ? <span style={{ fontSize: 13, background: "rgba(255,255,255,0.04)", color: "#4A5A72", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 20, padding: "6px 16px" }}>Not yet available</span>
-                  : <button className="btn-primary" style={{ fontSize: 13 }} onClick={() => setActiveForm(form.id)}>Fill Form →</button>}
-              </div>
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>}
     </div>
   );
 }
