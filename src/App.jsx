@@ -328,11 +328,9 @@ const db = {
     return (data || []).map(s => s.skill_name);
   },
   async upsertSkills(seekerId, skills) {
-    const { error: delErr } = await supabase.from("seeker_skills").delete().eq("seeker_id", seekerId);
-    if (delErr) throw delErr;
+    await supabase.from("seeker_skills").delete().eq("seeker_id", seekerId);
     if (skills.length > 0) {
-      const { error: insErr } = await supabase.from("seeker_skills").insert(skills.map(s => ({ seeker_id: seekerId, skill_name: s })));
-      if (insErr) throw insErr;
+      await supabase.from("seeker_skills").insert(skills.map(s => ({ seeker_id: seekerId, skill_name: s })));
     }
   },
   async getActivePostings() {
@@ -422,6 +420,142 @@ const db = {
       .select("*, job_seekers(full_name, governorate, sector)").order("date", { ascending: false });
     return data || [];
   },
+  async checkAllowedEmail(email) {
+    const { data } = await supabase.from("allowed_emails")
+      .select("*").eq("email", email.toLowerCase().trim()).single();
+    return data;
+  },
+  async getAllowedEmails() {
+    const { data } = await supabase.from("allowed_emails").select("*").order("created_at", { ascending: false });
+    return data || [];
+  },
+  async addAllowedEmail(email, role, name) {
+    const { error } = await supabase.from("allowed_emails")
+      .insert({ email: email.toLowerCase().trim(), role, full_name: name });
+    if (error) throw error;
+  },
+  async removeAllowedEmail(id) {
+    const { error } = await supabase.from("allowed_emails").delete().eq("id", id);
+    if (error) throw error;
+  },
+  async checkInvite(email) {
+    const { data } = await supabase.from("invites")
+      .select("*").eq("email", email.toLowerCase().trim()).eq("used", false).single();
+    return data;
+  },
+  async markInviteUsed(email) {
+    await supabase.from("invites").update({ used: true, used_at: new Date().toISOString() })
+      .eq("email", email.toLowerCase().trim());
+  },
+  async createInvite(invite) {
+    const { data, error } = await supabase.from("invites").insert(invite).select().single();
+    if (error) throw error;
+    return data;
+  },
+  async getInvites() {
+    const { data } = await supabase.from("invites").select("*").order("created_at", { ascending: false });
+    return data || [];
+  },
+  async deleteInvite(id) {
+    const { error } = await supabase.from("invites").delete().eq("id", id);
+    if (error) throw error;
+  },
+  async getAnnouncements() {
+    const { data } = await supabase.from("announcements")
+      .select("*").order("created_at", { ascending: false });
+    return data || [];
+  },
+  async createAnnouncement(ann) {
+    const { data, error } = await supabase.from("announcements").insert(ann).select().single();
+    if (error) throw error;
+    return data;
+  },
+  async deleteAnnouncement(id) {
+    const { error } = await supabase.from("announcements").delete().eq("id", id);
+    if (error) throw error;
+  },
+  async markAnnouncementRead(annId, userId) {
+    await supabase.from("announcement_reads").upsert({ announcement_id: annId, user_id: userId }, { onConflict: "announcement_id,user_id" });
+  },
+  async getReadAnnouncements(userId) {
+    const { data } = await supabase.from("announcement_reads").select("announcement_id").eq("user_id", userId);
+    return (data || []).map(r => r.announcement_id);
+  },
+  async saveAssessment(assessment) {
+    const { error } = await supabase.from("assessments").insert(assessment);
+    if (error) throw error;
+  },
+  async getMyAssessments(userId) {
+    const { data } = await supabase.from("assessments").select("*").eq("user_id", userId);
+    return data || [];
+  },
+  async getAllAssessments() {
+    const { data } = await supabase.from("assessments")
+      .select("*, job_seekers(full_name), trainers(full_name)")
+      .order("created_at", { ascending: false });
+    return data || [];
+  },
+  async checkAllowedEmail(email) {
+    const { data } = await supabase.from("allowed_emails")
+      .select("*").eq("email", email.toLowerCase().trim()).single();
+    return data;
+  },
+  async getAllowedEmails() {
+    const { data } = await supabase.from("allowed_emails").select("*").order("created_at", { ascending: false });
+    return data || [];
+  },
+  async addAllowedEmail(email, role, name) {
+    const { error } = await supabase.from("allowed_emails")
+      .insert({ email: email.toLowerCase().trim(), role, full_name: name });
+    if (error) throw error;
+  },
+  async removeAllowedEmail(id) {
+    const { error } = await supabase.from("allowed_emails").delete().eq("id", id);
+    if (error) throw error;
+  },
+  async checkInvite(email) {
+    const { data } = await supabase.from("invites")
+      .select("*").eq("email", email.toLowerCase().trim()).eq("used", false).single();
+    return data;
+  },
+  async markInviteUsed(email) {
+    await supabase.from("invites").update({ used: true, used_at: new Date().toISOString() })
+      .eq("email", email.toLowerCase().trim());
+  },
+  async createInvite(invite) {
+    const { data, error } = await supabase.from("invites").insert(invite).select().single();
+    if (error) throw error;
+    return data;
+  },
+  async getInvites() {
+    const { data } = await supabase.from("invites").select("*").order("created_at", { ascending: false });
+    return data || [];
+  },
+  async deleteInvite(id) {
+    const { error } = await supabase.from("invites").delete().eq("id", id);
+    if (error) throw error;
+  },
+  async getAnnouncements() {
+    const { data } = await supabase.from("announcements")
+      .select("*").order("created_at", { ascending: false });
+    return data || [];
+  },
+  async createAnnouncement(ann) {
+    const { data, error } = await supabase.from("announcements").insert(ann).select().single();
+    if (error) throw error;
+    return data;
+  },
+  async deleteAnnouncement(id) {
+    const { error } = await supabase.from("announcements").delete().eq("id", id);
+    if (error) throw error;
+  },
+  async markAnnouncementRead(annId, userId) {
+    await supabase.from("announcement_reads").upsert({ announcement_id: annId, user_id: userId }, { onConflict: "announcement_id,user_id" });
+  },
+  async getReadAnnouncements(userId) {
+    const { data } = await supabase.from("announcement_reads").select("announcement_id").eq("user_id", userId);
+    return (data || []).map(r => r.announcement_id);
+  },
   async saveAssessment(assessment) {
     const { data, error } = await supabase.from("assessments").insert(assessment).select().single();
     if (error) throw error;
@@ -498,125 +632,19 @@ const db = {
     const { data } = await supabase.from("announcement_reads").select("announcement_id").eq("user_id", userId);
     return (data || []).map(r => r.announcement_id);
   },
-
-  async checkAllowedEmail(email) {
-    const { data } = await supabase.from("allowed_emails")
-      .select("*").eq("email", email.toLowerCase().trim()).single();
+  async saveAssessment(assessment) {
+    const { data, error } = await supabase.from("assessments").insert(assessment).select().single();
+    if (error) throw error;
     return data;
   },
-  async getAllowedEmails() {
-    const { data } = await supabase.from("allowed_emails").select("*").order("created_at", { ascending: false });
+  async getMyAssessments(userId) {
+    const { data } = await supabase.from("assessments").select("*").eq("user_id", userId);
     return data || [];
   },
-  async addAllowedEmail(email, role, name) {
-    const { error } = await supabase.from("allowed_emails")
-      .insert({ email: email.toLowerCase().trim(), role, full_name: name });
-    if (error) throw error;
-  },
-  async removeAllowedEmail(id) {
-    const { error } = await supabase.from("allowed_emails").delete().eq("id", id);
-    if (error) throw error;
-  },
-  async checkInvite(email) {
-    const { data } = await supabase.from("invites")
-      .select("*").eq("email", email.toLowerCase().trim()).eq("used", false).single();
-    return data;
-  },
-  async markInviteUsed(email) {
-    await supabase.from("invites").update({ used: true, used_at: new Date().toISOString() })
-      .eq("email", email.toLowerCase().trim());
-  },
-  async createInvite(invite) {
-    const { data, error } = await supabase.from("invites").insert(invite).select().single();
-    if (error) throw error;
-    return data;
-  },
-  async getInvites() {
-    const { data } = await supabase.from("invites").select("*").order("created_at", { ascending: false });
+  async getAllAssessments() {
+    const { data } = await supabase.from("assessments")
+      .select("*, job_seekers(full_name), trainers(full_name)").order("created_at", { ascending: false });
     return data || [];
-  },
-  async deleteInvite(id) {
-    const { error } = await supabase.from("invites").delete().eq("id", id);
-    if (error) throw error;
-  },
-  async getAnnouncements() {
-    const { data } = await supabase.from("announcements")
-      .select("*").order("created_at", { ascending: false });
-    return data || [];
-  },
-  async createAnnouncement(ann) {
-    const { data, error } = await supabase.from("announcements").insert(ann).select().single();
-    if (error) throw error;
-    return data;
-  },
-  async deleteAnnouncement(id) {
-    const { error } = await supabase.from("announcements").delete().eq("id", id);
-    if (error) throw error;
-  },
-  async checkAllowedEmail(email) {
-    const { data } = await supabase.from("allowed_emails")
-      .select("*").eq("email", email.toLowerCase().trim()).single();
-    return data;
-  },
-  async getAllowedEmails() {
-    const { data } = await supabase.from("allowed_emails").select("*").order("created_at", { ascending: false });
-    return data || [];
-  },
-  async addAllowedEmail(email, role, name) {
-    const { error } = await supabase.from("allowed_emails")
-      .insert({ email: email.toLowerCase().trim(), role, full_name: name });
-    if (error) throw error;
-  },
-  async removeAllowedEmail(id) {
-    const { error } = await supabase.from("allowed_emails").delete().eq("id", id);
-    if (error) throw error;
-  },
-  async checkInvite(email) {
-    const { data } = await supabase.from("invites")
-      .select("*").eq("email", email.toLowerCase().trim()).eq("used", false).single();
-    return data;
-  },
-  async markInviteUsed(email) {
-    await supabase.from("invites").update({ used: true, used_at: new Date().toISOString() })
-      .eq("email", email.toLowerCase().trim());
-  },
-  async createInvite(invite) {
-    const { data, error } = await supabase.from("invites").insert(invite).select().single();
-    if (error) throw error;
-    return data;
-  },
-  async getInvites() {
-    const { data } = await supabase.from("invites").select("*").order("created_at", { ascending: false });
-    return data || [];
-  },
-  async deleteInvite(id) {
-    const { error } = await supabase.from("invites").delete().eq("id", id);
-    if (error) throw error;
-  },
-  async getAnnouncements() {
-    const { data } = await supabase.from("announcements")
-      .select("*").order("created_at", { ascending: false });
-    return data || [];
-  },
-  async createAnnouncement(ann) {
-    const { data, error } = await supabase.from("announcements").insert(ann).select().single();
-    if (error) throw error;
-    return data;
-  },
-  async deleteAnnouncement(id) {
-    const { error } = await supabase.from("announcements").delete().eq("id", id);
-    if (error) throw error;
-  },
-  async markAnnouncementRead(annId, userId) {
-    await supabase.from("announcement_reads").upsert({ announcement_id: annId, user_id: userId }, { onConflict: "announcement_id,user_id" });
-  },
-  async getReadAnnouncements(userId) {
-    const { data } = await supabase.from("announcement_reads").select("announcement_id").eq("user_id", userId);
-    return (data || []).map(r => r.announcement_id);
-  },
-  async getAllSeekerSkills() {
-    const { data } = await supabase.from("seeker_skills").select("skill_name");
-    return (data || []).map(s => s.skill_name);
   },
   async saveReflection(reflection) {
     const { error } = await supabase.from("session_reflections").insert(reflection);
@@ -738,147 +766,6 @@ function StatCard({ label, value, icon, color, delay = 0 }) {
       <div style={{ fontSize: 12, color: "#8A9BB5", fontWeight: 500 }}>{label}</div>
     </div>
   );
-}
-
-// ── PageHeader ────────────────────────────────────────────────
-function PageHeader({ title, subtitle, action }) {
-  return (
-    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 28 }}>
-      <div>
-        <h1 style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 24, fontWeight: 700, color: "#F0EBE0", marginBottom: 4 }}>{title}</h1>
-        {subtitle && <p style={{ color: "#8A9BB5", fontSize: 14 }}>{subtitle}</p>}
-      </div>
-      {action && <div style={{ flexShrink: 0, marginLeft: 16 }}>{action}</div>}
-    </div>
-  );
-}
-
-// ── Shell ─────────────────────────────────────────────────────
-function Shell({ navItems, userLabel, userSub, accentColor = C.primary, children, activePage, setActivePage, session, role }) {
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  return (
-    <div style={{ display: "flex", minHeight: "100vh", background: "#080F1E" }}>
-      <style>{globalStyles}</style>
-      {sidebarOpen && <div className="mobile-overlay" onClick={() => setSidebarOpen(false)} />}
-      <div className={"sidebar" + (sidebarOpen ? " open" : "")} style={{ width: 230, flexShrink: 0, background: "rgba(10,18,32,0.97)", borderRight: "1px solid rgba(201,168,76,0.12)", display: "flex", flexDirection: "column", padding: "24px 12px", position: "sticky", top: 0, height: "100vh", overflowY: "auto", backdropFilter: "blur(20px)", zIndex: 40 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "0 6px", marginBottom: 28 }}>
-          <div style={{ width: 36, height: 36, borderRadius: 10, background: "rgba(201,168,76,0.15)", border: "1px solid rgba(201,168,76,0.3)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, color: accentColor, fontWeight: 700 }}>I</div>
-          <div>
-            <div style={{ fontSize: 13, fontWeight: 700, color: "#F0EBE0", letterSpacing: 1 }}>INJAZ</div>
-            <div style={{ fontSize: 9, color: "#4A5A72", letterSpacing: 1.5, textTransform: "uppercase" }}>Career Platform</div>
-          </div>
-        </div>
-        <div style={{ padding: "10px", marginBottom: 20, background: "rgba(255,255,255,0.03)", borderRadius: 10, border: "1px solid rgba(255,255,255,0.06)" }}>
-          <div style={{ fontSize: 13, fontWeight: 600, color: "#F0EBE0", marginBottom: 2 }}>{userLabel}</div>
-          <div style={{ fontSize: 11, color: accentColor }}>{userSub}</div>
-        </div>
-        <nav style={{ flex: 1, display: "flex", flexDirection: "column", gap: 2 }}>
-          {navItems.map(item => (
-            <button key={item.id} className={"nav-item" + (activePage === item.id ? " active" : "")}
-              onClick={() => { setActivePage(item.id); setSidebarOpen(false); }}
-              style={{ fontFamily: "'DM Sans',sans-serif" }}>
-              <span className="nav-icon">{item.icon}</span>
-              <span style={{ flex: 1 }}>{item.label}</span>
-              {item.badge && (item.badgeType === "notif"
-                ? <span style={{ minWidth: 18, height: 18, borderRadius: 9, background: "#C8392B", color: "#fff", fontSize: 10, fontWeight: 800, display: "inline-flex", alignItems: "center", justifyContent: "center", padding: "0 4px" }}>{item.badge}</span>
-                : <span style={{ fontSize: 11, background: "rgba(201,168,76,0.2)", color: "#C9A84C", borderRadius: 10, padding: "1px 7px", fontWeight: 700, border: "1px solid rgba(201,168,76,0.3)" }}>{item.badge}</span>
-              )}
-            </button>
-          ))}
-        </nav>
-        <button className="nav-item" onClick={async () => {
-            try { await supabase.auth.signOut(); } catch (e) {}
-            window.location.href = window.location.origin;
-          }} style={{ marginTop: 12, color: "#C8392B", fontFamily: "'DM Sans',sans-serif" }}>
-          <span className="nav-icon">&#x2192;</span> Sign Out
-        </button>
-      </div>
-      <div style={{ flex: 1, overflowX: "hidden" }}>
-        <div style={{ maxWidth: 1100, margin: "0 auto", padding: "32px 28px" }}>
-          {children}
-        </div>
-      </div>
-      {session && role && role !== "injaz_team" && role !== "employer" && (
-        <AnnouncementPopupManager session={session} role={role} onNavigate={() => setActivePage("announcements")} />
-      )}
-    </div>
-  );
-}
-
-// ── Announcement popup ────────────────────────────────────────
-function useAnnouncementRealtime(session, role, onNew) {
-  useEffect(() => {
-    if (!supabase || !session?.user?.id || role === "injaz_team") return;
-    const ch = supabase.channel("ann-rt")
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "announcements" }, (payload) => {
-        const ann = payload.new;
-        const ok = ann.target_role === "all" ||
-          (role === "seeker" && (ann.target_role === "seeker" || ann.target_role === "all")) ||
-          (role === "trainer" && (ann.target_role === "trainer" || ann.target_role === "all"));
-        if (ok) onNew(ann);
-      }).subscribe();
-    return () => { supabase.removeChannel(ch); };
-  }, [session?.user?.id, role]);
-}
-
-function AnnouncementPopup({ ann, onClose, onView }) {
-  const [hiding, setHiding] = useState(false);
-  useEffect(() => {
-    const t = setTimeout(() => { setHiding(true); setTimeout(onClose, 300); }, 8000);
-    return () => clearTimeout(t);
-  }, []);
-  const dismiss = () => { setHiding(true); setTimeout(onClose, 300); };
-  return (
-    <div style={{ position: "fixed", bottom: 80, right: 24, width: 340, maxWidth: "calc(100vw - 48px)", background: "rgba(10,21,37,0.97)", border: "1px solid rgba(201,168,76,0.4)", borderRadius: 14, boxShadow: "0 20px 60px rgba(0,0,0,0.7)", backdropFilter: "blur(24px)", zIndex: 9999, overflow: "hidden", opacity: hiding ? 0 : 1, transform: hiding ? "translateX(110%)" : "translateX(0)", transition: "opacity .3s, transform .3s" }}>
-      <div style={{ height: 3, background: "linear-gradient(90deg,#C9A84C,#E8C96A)" }} />
-      <div style={{ padding: "16px 18px" }}>
-        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 10 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <div style={{ width: 36, height: 36, borderRadius: 10, background: "rgba(201,168,76,0.15)", border: "1px solid rgba(201,168,76,0.3)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>◆</div>
-            <div>
-              <div style={{ fontSize: 11, color: "#C9A84C", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 2 }}>New Announcement</div>
-              <div style={{ fontSize: 14, fontWeight: 700, color: "#F0EBE0" }}>{ann.title}</div>
-            </div>
-          </div>
-          <button onClick={dismiss} style={{ background: "none", border: "none", color: "#4A5A72", cursor: "pointer", fontSize: 18, padding: "2px 4px", flexShrink: 0 }}>x</button>
-        </div>
-        <p style={{ fontSize: 13, color: "#8A9BB5", margin: "0 0 12px 46px", lineHeight: 1.5 }}>{ann.body}</p>
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginLeft: 46 }}>
-          <button onClick={() => { onView(); dismiss(); }} style={{ fontSize: 12, fontWeight: 600, color: "#C9A84C", background: "rgba(201,168,76,0.1)", border: "1px solid rgba(201,168,76,0.25)", borderRadius: 8, padding: "5px 12px", cursor: "pointer" }}>View</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function AnnouncementPopupManager({ session, role, onNavigate }) {
-  const [queue, setQueue] = useState([]);
-  useAnnouncementRealtime(session, role, ann => setQueue(q => [...q, { ...ann, _k: Date.now() }]));
-  const remove = k => setQueue(q => q.filter(a => a._k !== k));
-  const cur = queue[queue.length - 1];
-  if (!cur) return null;
-  return <AnnouncementPopup key={cur._k} ann={cur} onClose={() => remove(cur._k)} onView={onNavigate} />;
-}
-
-// ── useUnreadAnnouncements ────────────────────────────────────
-function useUnreadAnnouncements(session) {
-  const [count, setCount] = useState(0);
-  const refresh = async (uid) => {
-    if (!uid) return;
-    const [anns, reads] = await Promise.all([db.getAnnouncements(), db.getReadAnnouncements(uid)]);
-    setCount(anns.filter(a => !reads.includes(a.id)).length);
-  };
-  useEffect(() => {
-    if (!session?.user?.id) return;
-    refresh(session.user.id);
-    if (!supabase) return;
-    const ch = supabase.channel("unread-badge")
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "announcements" }, () => refresh(session.user.id))
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "announcement_reads" }, () => refresh(session.user.id))
-      .subscribe();
-    return () => { supabase.removeChannel(ch); };
-  }, [session?.user?.id]);
-  return count;
 }
 
 // ── Setup error screen ────────────────────────────────────────
@@ -1135,7 +1022,8 @@ function SeekerDashboard({ setActivePage }) {
 
 // ── Seeker Profile ────────────────────────────────────────────
 function SeekerProfile() {
-  const { profile, setProfile, showSuccess, showError } = useAuth();
+  const { profile, setProfile } = useAuth();
+  const { showSuccess, showError } = useToast();
   const [form, setForm] = useState({
     full_name: "", phone: "", governorate: "", nationality: "Lebanese",
     employment_status: "seeking", education_level: "bachelor", years_experience: 0,
@@ -1171,17 +1059,18 @@ function SeekerProfile() {
   };
 
   const handleSave = async () => {
-    if (!profile?.id) { showError("Profile not ready. Please refresh."); return; }
+    if (!profile?.id) {
+      showError("Profile not ready. Please refresh the page.");
+      return;
+    }
     setSaving(true);
-    await new Promise(r => setTimeout(r, 0));
-    const withTimeout = (p) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error("Timed out — check your connection")), 15000))]);
     try {
       const score = computeScore(form, skills);
-      await withTimeout(db.updateSeekerProfile(profile.id, { ...form, years_experience: parseInt(form.years_experience) || 0, profile_score: score }));
-      await withTimeout(db.upsertSkills(profile.id, skills));
+      await db.updateSeekerProfile(profile.id, { ...form, years_experience: parseInt(form.years_experience) || 0, profile_score: score });
+      await db.upsertSkills(profile.id, skills);
       setProfile(p => ({ ...p, ...form, profile_score: score }));
       showSuccess("Profile saved successfully!");
-    } catch (e) { showError(e.message || "Save failed. Please try again."); }
+    } catch (e) { showError(e.message || "Save failed"); }
     finally { setSaving(false); }
   };
 
@@ -1468,10 +1357,9 @@ function CoverLetterAI() {
             <Label>Tone</Label>
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {[["formal", "◆ Formal & Professional"], ["youth", "✦ Youth-Friendly"], ["ngo", "◈ NGO-Focused"]].map(([v, l]) => (
-                <button key={v} type="button" onClick={() => setTone(v)}
-                  style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: C.radiusSm, border: `1px solid ${tone === v ? "rgba(201,168,76,0.5)" : "rgba(255,255,255,0.1)"}`, background: tone === v ? "rgba(201,168,76,0.12)" : "rgba(255,255,255,0.04)", cursor: "pointer", fontSize: 13, fontWeight: tone === v ? 600 : 400, color: tone === v ? "#C9A84C" : "#F0EBE0", width: "100%", textAlign: "left", fontFamily: "'DM Sans',sans-serif" }}>
-                  {l}
-                </button>
+                <label key={v} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: C.radiusSm, border: `1px solid ${tone === v ? "rgba(201,168,76,0.5)" : "rgba(255,255,255,0.1)"}`, background: tone === v ? "rgba(201,168,76,0.12)" : "rgba(255,255,255,0.04)", cursor: "pointer", fontSize: 13, fontWeight: tone === v ? 600 : 400, color: tone === v ? "#C9A84C" : "#F0EBE0" }}>
+                  <input type="radio" value={v} checked={tone === v} onChange={() => setTone(v)} style={{ display: "none" }} />{l}
+                </label>
               ))}
             </div>
           </div>
@@ -1925,7 +1813,7 @@ function PostJob() {
       showSuccess("Job posted successfully! AI matching will begin immediately.");
       setStep(1);
       setForm({ title: "", type: "full-time", work_mode: "onsite", governorate: "", sector: "", description: "", required_skills: [], min_experience_years: 0, min_education: "bachelor", openings: 1 });
-    } catch (e) { showError(e?.message || "Submission failed. Please try again."); }
+    } catch (e) { showError("Error: " + e.message); }
     finally { setPosting(false); }
   };
 
@@ -3888,7 +3776,7 @@ function CheckpointManager({ isInjazTeam = false }) {
       showSuccess("Program checkpoint updated! All participants will see the new stage.");
       const d = await db.getProgramCheckpoint();
       setCheckpoint(d);
-    } catch (e) { showError(e?.message || "Submission failed. Please try again."); }
+    } catch (e) { showError("Error: " + e.message); }
     finally { setSaving(false); }
   };
 
@@ -3916,15 +3804,15 @@ function CheckpointManager({ isInjazTeam = false }) {
             <div style={{ fontSize: 11, color: "#C9A84C", letterSpacing: 2, textTransform: "uppercase", marginBottom: 20 }}>Select Active Stage</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 24 }}>
               {INTERSECTION_CHECKPOINTS.map(cp => (
-                <button key={cp.id} type="button" onClick={() => setForm(f => ({ ...f, checkpoint: cp.id }))}
-                  style={{ display: "flex", alignItems: "center", gap: 16, padding: "16px 20px", borderRadius: 12, border: `1px solid ${form.checkpoint === cp.id ? cp.color + "66" : "rgba(255,255,255,0.08)"}`, background: form.checkpoint === cp.id ? cp.colorLight : "rgba(255,255,255,0.02)", cursor: "pointer", transition: "all .2s", width: "100%", textAlign: "left", fontFamily: "'DM Sans',sans-serif" }}>
+                <label key={cp.id} style={{ display: "flex", alignItems: "center", gap: 16, padding: "16px 20px", borderRadius: 12, border: `1px solid ${form.checkpoint === cp.id ? cp.color + "66" : "rgba(255,255,255,0.08)"}`, background: form.checkpoint === cp.id ? cp.colorLight : "rgba(255,255,255,0.02)", cursor: "pointer", transition: "all .2s" }}>
+                  <input type="radio" value={cp.id} checked={form.checkpoint === cp.id} onChange={() => setForm(f => ({ ...f, checkpoint: cp.id }))} style={{ display: "none" }} />
                   <div style={{ width: 36, height: 36, borderRadius: "50%", background: form.checkpoint === cp.id ? cp.color : "rgba(255,255,255,0.06)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, color: form.checkpoint === cp.id ? "#080F1E" : cp.color, flexShrink: 0, fontWeight: 700 }}>{cp.icon}</div>
                   <div style={{ flex: 1 }}>
                     <div style={{ fontWeight: 600, fontSize: 15, color: form.checkpoint === cp.id ? cp.color : "#F0EBE0", marginBottom: 2 }}>{cp.label}</div>
                     <div style={{ fontSize: 12, color: "#4A5A72" }}>{cp.period} — {cp.tasks.join(", ")}</div>
                   </div>
                   {form.checkpoint === cp.id && <span style={{ color: cp.color }}>◆</span>}
-                </button>
+                </label>
               ))}
             </div>
 
@@ -4048,7 +3936,7 @@ function MyAttendance() {
         setReflectionSession({ ...added });
         setShowReflection(true);
       }
-    } catch (e) { showError(e?.message || "Submission failed. Please try again."); }
+    } catch (e) { showError("Error: " + e.message); }
     finally { setAdding(false); }
   };
 
@@ -4058,7 +3946,7 @@ function MyAttendance() {
       await db.deleteAttendanceSession(id);
       setSessions(s => s.filter(x => x.id !== id));
       showSuccess("Session removed.");
-    } catch (e) { showError(e?.message || "Submission failed. Please try again."); }
+    } catch (e) { showError("Error: " + e.message); }
     finally { setDeleting(null); }
   };
 
@@ -4393,7 +4281,7 @@ function AttendanceVerification({ isInjazTeam = false }) {
       await db.verifyAttendanceSession(id, session?.user?.id);
       setAllSessions(prev => prev.map(s => s.id === id ? { ...s, verified: true } : s));
       showSuccess("Session verified!");
-    } catch (e) { showError(e?.message || "Submission failed. Please try again."); }
+    } catch (e) { showError("Error: " + e.message); }
     finally { setVerifying(null); }
   };
 
@@ -4596,7 +4484,8 @@ function AttendanceVerification({ isInjazTeam = false }) {
 
 // ── Mentorship Session Reflection Card Modal ──────────────────
 function ReflectionCardModal({ session, sessionNumber, onClose, onSave }) {
-  const { profile, showSuccess, showError } = useAuth();
+  const { profile } = useAuth();
+  const { showSuccess, showError } = useToast();
   const [saving, setSaving] = useState(false);
   const [rating, setRating] = useState(0);
   const [hoveredRating, setHoveredRating] = useState(0);
@@ -4628,7 +4517,7 @@ function ReflectionCardModal({ session, sessionNumber, onClose, onSave }) {
       showSuccess("Reflection card saved!");
       onSave();
       onClose();
-    } catch (e) { showError(e?.message || "Submission failed. Please try again."); }
+    } catch (e) { showError("Error: " + e.message); }
     finally { setSaving(false); }
   };
 
@@ -4775,20 +4664,15 @@ function StarRating({ value, onChange, max = 5, labels = [] }) {
 function RadioGroup({ options, value, onChange }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-      {options.map(opt => {
-        const val = opt.value || opt;
-        const lbl = opt.label || opt;
-        const sel = value === val;
-        return (
-          <button key={val} type="button" onClick={() => onChange(val)}
-            style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 14px", borderRadius: 10, border: `1px solid ${sel ? "rgba(201,168,76,0.4)" : "rgba(255,255,255,0.08)"}`, background: sel ? "rgba(201,168,76,0.08)" : "rgba(255,255,255,0.02)", cursor: "pointer", width: "100%", textAlign: "left", fontFamily: "'DM Sans',sans-serif", transition: "border .15s,background .15s" }}>
-            <div style={{ width: 16, height: 16, borderRadius: "50%", border: `2px solid ${sel ? "#C9A84C" : "rgba(255,255,255,0.2)"}`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-              {sel && <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#C9A84C" }} />}
-            </div>
-            <span style={{ fontSize: 13, color: sel ? "#C9A84C" : "#F0EBE0" }}>{lbl}</span>
-          </button>
-        );
-      })}
+      {options.map(opt => (
+        <label key={opt.value || opt} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 14px", borderRadius: 10, border: `1px solid ${value === (opt.value || opt) ? "rgba(201,168,76,0.4)" : "rgba(255,255,255,0.08)"}`, background: value === (opt.value || opt) ? "rgba(201,168,76,0.08)" : "rgba(255,255,255,0.02)", cursor: "pointer", transition: "all .2s" }}>
+          <div style={{ width: 16, height: 16, borderRadius: "50%", border: `2px solid ${value === (opt.value || opt) ? "#C9A84C" : "rgba(255,255,255,0.2)"}`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+            {value === (opt.value || opt) && <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#C9A84C" }} />}
+          </div>
+          <input type="radio" value={opt.value || opt} checked={value === (opt.value || opt)} onChange={() => onChange(opt.value || opt)} style={{ display: "none" }} />
+          <span style={{ fontSize: 13, color: value === (opt.value || opt) ? "#C9A84C" : "#F0EBE0" }}>{opt.label || opt}</span>
+        </label>
+      ))}
     </div>
   );
 }
@@ -4823,9 +4707,6 @@ function SeekerAssessments() {
   const [submitted, setSubmitted] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeForm, setActiveForm] = useState(null);
-  const [expandedView, setExpandedView] = useState(null);
-
-  const reload = () => db.getMyAssessments(profile?.id, "seeker").then(setSubmitted).catch(() => {});
 
   useEffect(() => {
     if (profile?.id) {
@@ -4836,84 +4717,65 @@ function SeekerAssessments() {
   const hasSubmitted = (type) => submitted.some(s => s.form_type === type);
 
   const forms = [
-    { id: "mentee_first_meeting", title: "First Meeting Feedback", desc: "Share your experience after your first 1-on-1 meeting with your mentor", icon: "◆", color: "#27AE60", timing: "After 1st session", locked: false },
-    { id: "mentee_mid_program", title: "Mid-Program Assessment", desc: "Help us improve by sharing your progress at the midpoint of the program", icon: "◈", color: "#2980B9", timing: "Mid-program", locked: true, lockedMsg: "This survey will be unlocked at the midpoint of the program" },
-    { id: "mentee_final", title: "Final Program Assessment", desc: "Share your overall experience and help shape the next edition", icon: "★", color: "#C9A84C", timing: "End of program", locked: true, lockedMsg: "This survey will be unlocked at the end of the program" },
+    {
+      id: "mentee_first_meeting",
+      title: "First Meeting Feedback",
+      desc: "Share your experience after your first 1-on-1 meeting with your mentor",
+      icon: "◆",
+      color: "#27AE60",
+      timing: "After 1st session",
+    },
+    {
+      id: "mentee_mid_program",
+      title: "Mid-Program Assessment",
+      desc: "Help us improve by sharing your progress at the midpoint of the program",
+      icon: "◈",
+      color: "#2980B9",
+      timing: "Mid-program",
+    },
+    {
+      id: "mentee_final",
+      title: "Final Program Assessment",
+      desc: "Share your overall experience and help shape the next edition",
+      icon: "★",
+      color: "#C9A84C",
+      timing: "End of program",
+    },
   ];
 
-  // Block locked forms at routing level
-  if (activeForm === "mentee_first_meeting") return <MenteeFirstMeetingForm onBack={() => setActiveForm(null)} onSubmit={() => { reload(); setActiveForm(null); }} />;
-  if (activeForm === "mentee_mid_program" || activeForm === "mentee_final") { setActiveForm(null); return null; }
+  if (activeForm === "mentee_first_meeting") return <MenteeFirstMeetingForm onBack={() => setActiveForm(null)} onSubmit={() => { setActiveForm(null); db.getMyAssessments(profile.id, "seeker").then(setSubmitted); }} />;
+  if (activeForm === "mentee_mid_program") return <MenteeMidProgramForm onBack={() => setActiveForm(null)} onSubmit={() => { setActiveForm(null); db.getMyAssessments(profile.id, "seeker").then(setSubmitted); }} />;
+  if (activeForm === "mentee_final") return <MenteeFinalForm onBack={() => setActiveForm(null)} onSubmit={() => { setActiveForm(null); db.getMyAssessments(profile.id, "seeker").then(setSubmitted); }} />;
 
   return (
     <div>
       <div style={{ marginBottom: 28 }}>
-        <div style={{ fontSize: 11, color: "#C9A84C", letterSpacing: 2, textTransform: "uppercase", marginBottom: 8 }}>◈ Intersection 5.0 Program</div>
+        <div style={{ fontSize: 11, color: "#C9A84C", letterSpacing: 2, textTransform: "uppercase", marginBottom: 8 }}>◈ Intersection Program</div>
         <h1 style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 26, fontWeight: 700, color: "#F0EBE0", marginBottom: 6 }}>My Assessments</h1>
         <p style={{ color: "#8A9BB5", fontSize: 14 }}>Program feedback forms — only for 1-on-1 mentorship participants</p>
       </div>
 
-      {loading ? <div style={{ display: "flex", justifyContent: "center", padding: 60 }}><Spinner size={32} /></div>
-        : <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          {forms.map(form => {
-            const submission = submitted.find(s => s.form_type === form.id);
-            const isDone = !!submission;
-            const isLocked = form.locked && !isDone;
-            const isExpanded = expandedView === form.id;
-            return (
-              <div key={form.id} className="card" style={{ padding: 0, overflow: "hidden", border: isDone ? "1px solid rgba(39,174,96,0.3)" : isLocked ? "1px solid rgba(255,255,255,0.06)" : `1px solid ${form.color}22`, opacity: isLocked ? 0.6 : 1, transition: "all .3s" }}>
-                <div style={{ padding: "22px 28px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <div style={{ display: "flex", gap: 20, alignItems: "center" }}>
-                    <div style={{ width: 52, height: 52, borderRadius: "50%", background: isDone ? "rgba(39,174,96,0.12)" : isLocked ? "rgba(255,255,255,0.04)" : `${form.color}22`, border: `1px solid ${isDone ? "rgba(39,174,96,0.3)" : isLocked ? "rgba(255,255,255,0.1)" : form.color + "44"}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, color: isDone ? "#4AE08A" : isLocked ? "#4A5A72" : form.color, flexShrink: 0 }}>
-                      {isDone ? "✓" : isLocked ? "🔒" : form.icon}
-                    </div>
-                    <div>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-                        <div style={{ fontWeight: 700, fontSize: 16, color: isLocked ? "#4A5A72" : "#F0EBE0" }}>{form.title}</div>
-                        <span style={{ fontSize: 10, background: isDone ? "rgba(39,174,96,0.12)" : isLocked ? "rgba(255,255,255,0.04)" : `${form.color}22`, color: isDone ? "#4AE08A" : isLocked ? "#4A5A72" : form.color, border: `1px solid ${isDone ? "rgba(39,174,96,0.2)" : isLocked ? "rgba(255,255,255,0.08)" : form.color + "44"}`, borderRadius: 20, padding: "2px 8px" }}>{form.timing}</span>
-                        {isLocked && <span style={{ fontSize: 10, background: "rgba(255,255,255,0.06)", color: "#4A5A72", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 20, padding: "2px 8px" }}>Locked</span>}
-                      </div>
-                      <div style={{ fontSize: 13, color: "#8A9BB5" }}>{isDone ? `Submitted ${new Date(submission.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}` : isLocked ? form.lockedMsg : form.desc}</div>
-                    </div>
-                  </div>
-                  <div style={{ flexShrink: 0, marginLeft: 20, display: "flex", gap: 8, alignItems: "center" }}>
-                    {isDone ? (
-                      <>
-                        <span style={{ fontSize: 12, background: "rgba(39,174,96,0.12)", color: "#4AE08A", border: "1px solid rgba(39,174,96,0.3)", borderRadius: 20, padding: "6px 14px", fontWeight: 600 }}>✓ Submitted</span>
-                        <button onClick={() => setExpandedView(isExpanded ? null : form.id)} style={{ fontSize: 12, fontWeight: 600, color: "#C9A84C", background: "rgba(201,168,76,0.08)", border: "1px solid rgba(201,168,76,0.25)", borderRadius: 20, padding: "6px 14px", cursor: "pointer", fontFamily: "'DM Sans',sans-serif" }}>{isExpanded ? "Hide ▲" : "View ▼"}</button>
-                      </>
-                    ) : isLocked ? (
-                      <span style={{ fontSize: 12, background: "rgba(255,255,255,0.04)", color: "#4A5A72", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 20, padding: "6px 14px" }}>Not yet available</span>
-                    ) : (
-                      <button className="btn-primary" style={{ fontSize: 13 }} onClick={() => setActiveForm(form.id)}>Fill Form →</button>
-                    )}
-                  </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        {forms.map(form => (
+          <div key={form.id} className="card" style={{ padding: 28, border: hasSubmitted(form.id) ? "1px solid rgba(39,174,96,0.3)" : `1px solid ${form.color}22`, display: "flex", justifyContent: "space-between", alignItems: "center", transition: "all .3s" }}>
+            <div style={{ display: "flex", gap: 20, alignItems: "center" }}>
+              <div style={{ width: 52, height: 52, borderRadius: "50%", background: `${form.color}22`, border: `1px solid ${form.color}44`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, color: form.color, flexShrink: 0 }}>{form.icon}</div>
+              <div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                  <div style={{ fontWeight: 700, fontSize: 16, color: "#F0EBE0" }}>{form.title}</div>
+                  <span style={{ fontSize: 10, background: `${form.color}22`, color: form.color, border: `1px solid ${form.color}44`, borderRadius: 20, padding: "2px 8px" }}>{form.timing}</span>
                 </div>
-                {isDone && isExpanded && submission?.data && (
-                  <div style={{ borderTop: "1px solid rgba(39,174,96,0.15)", padding: "20px 28px 28px" }}>
-                    <div style={{ fontSize: 11, color: "#4AE08A", fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", marginBottom: 16 }}>◈ Your Submission</div>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                      {Object.entries(submission.data).map(([key, value]) => {
-                        if (!value && value !== 0) return null;
-                        if (Array.isArray(value) && value.length === 0) return null;
-                        const label = key.replace(/_/g, " ").replace(/\w/g, l => l.toUpperCase());
-                        const isLong = typeof value === "string" && value.length > 55;
-                        return (
-                          <div key={key} style={{ background: "rgba(39,174,96,0.04)", border: "1px solid rgba(39,174,96,0.12)", borderRadius: 10, padding: "12px 14px", gridColumn: isLong ? "1 / -1" : "auto" }}>
-                            <div style={{ fontSize: 10, color: "#C9A84C", fontWeight: 700, letterSpacing: 0.8, textTransform: "uppercase", marginBottom: 6 }}>{label}</div>
-                            <div style={{ fontSize: 13, color: "#F0EBE0", lineHeight: 1.6 }}>
-                              {typeof value === "number" ? <span>{[1,2,3,4,5].map(s => <span key={s} style={{ color: s <= value ? "#C9A84C" : "rgba(255,255,255,0.15)" }}>★</span>)} <span style={{ color: "#C9A84C", fontWeight: 700 }}> {value}/5</span></span> : Array.isArray(value) ? value.join(", ") : String(value)}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
+                <div style={{ fontSize: 13, color: "#8A9BB5" }}>{form.desc}</div>
               </div>
-            );
-          })}
-        </div>}
+            </div>
+            <div style={{ flexShrink: 0, marginLeft: 20 }}>
+              {hasSubmitted(form.id)
+                ? <span style={{ fontSize: 13, background: "rgba(39,174,96,0.12)", color: "#4AE08A", border: "1px solid rgba(39,174,96,0.3)", borderRadius: 20, padding: "6px 16px", fontWeight: 600 }}>✓ Submitted</span>
+                : <button className="btn-primary" style={{ fontSize: 13 }} onClick={() => setActiveForm(form.id)}>Fill Form →</button>}
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -4948,13 +4810,11 @@ function RadioQuestion({ label, sub, options, value, onChange }) {
       {sub && <div style={{ fontSize: 12, color: "#8A9BB5", marginBottom: 12 }}>{sub}</div>}
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {options.map(opt => (
-          <button key={opt} type="button" onClick={() => onChange(opt)}
-            style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", borderRadius: 10, border: `1px solid ${value === opt ? "rgba(201,168,76,0.4)" : "rgba(255,255,255,0.08)"}`, background: value === opt ? "rgba(201,168,76,0.08)" : "rgba(255,255,255,0.02)", cursor: "pointer", width: "100%", textAlign: "left", fontFamily: "'DM Sans',sans-serif", transition: "border .15s,background .15s" }}>
-            <div style={{ width: 16, height: 16, borderRadius: "50%", border: `2px solid ${value === opt ? "#C9A84C" : "rgba(255,255,255,0.2)"}`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-              {value === opt && <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#C9A84C" }} />}
-            </div>
+          <label key={opt} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", borderRadius: 10, border: `1px solid ${value === opt ? "rgba(201,168,76,0.4)" : "rgba(255,255,255,0.08)"}`, background: value === opt ? "rgba(201,168,76,0.08)" : "rgba(255,255,255,0.02)", cursor: "pointer", transition: "all .15s" }}>
+            <input type="radio" checked={value === opt} onChange={() => onChange(opt)} style={{ display: "none" }} />
+            <div style={{ width: 16, height: 16, borderRadius: "50%", border: `2px solid ${value === opt ? "#C9A84C" : "rgba(255,255,255,0.2)"}`, background: value === opt ? "#C9A84C" : "transparent", flexShrink: 0, transition: "all .15s" }} />
             <span style={{ fontSize: 13, color: value === opt ? "#C9A84C" : "#8A9BB5" }}>{opt}</span>
-          </button>
+          </label>
         ))}
       </div>
     </div>
@@ -5076,10 +4936,11 @@ function MyAssessments() {
 
 // ── Mentee First Meeting Form ─────────────────────────────────
 function MenteeFirstMeetingForm({ onBack, onSubmit }) {
-  const { profile, showSuccess, showError } = useAuth();
+  const { profile } = useAuth();
+  const { showSuccess, showError } = useToast();
   const [saving, setSaving] = useState(false);
   const [f, setF] = useState({
-    edition: "intersection_5", mentor_name: "", phone: "", field_of_study: "", university: "",
+    edition: "intersection_4", mentor_name: "", phone: "", field_of_study: "", university: "",
     current_employer: "", job_title: "", had_first_meeting: "yes",
     first_meeting_date: "", mentor_encouraging: "", meeting_description: "",
     agreed_on_frequency: "", greatest_strengths: "", major_challenges: "",
@@ -5088,18 +4949,13 @@ function MenteeFirstMeetingForm({ onBack, onSubmit }) {
   const set = (k, v) => setF(p => ({ ...p, [k]: v }));
 
   const handleSubmit = async () => {
-    if (!profile?.id) { showError("Profile not loaded. Please refresh the page."); return; }
     if (!f.mentor_name || !f.had_first_meeting) { showError("Please fill required fields."); return; }
     setSaving(true);
-    await new Promise(r => setTimeout(r, 0));
     try {
-      await Promise.race([
-        db.saveAssessment({ seeker_id: profile.id, form_type: "mentee_first_meeting", data: f }),
-        new Promise((_, rej) => setTimeout(() => rej(new Error("Request timed out")), 15000)),
-      ]);
+      await db.saveAssessment({ seeker_id: profile.id, form_type: "mentee_first_meeting", data: f });
       showSuccess("Assessment submitted! Thank you.");
       onSubmit();
-    } catch (e) { showError(e?.message || "Submission failed. Please try again."); }
+    } catch (e) { showError("Error: " + e.message); }
     finally { setSaving(false); }
   };
 
@@ -5120,7 +4976,7 @@ function MenteeFirstMeetingForm({ onBack, onSubmit }) {
         <FormSection icon="◆" title="Your Information">
           <div className="grid-2" style={{ gap: 14 }}>
             <FormField label="Edition" required>
-              <RadioGroup options={[{ value: "intersection_5", label: "Intersection 5.0 General" }, { value: "intersection_tech", label: "Intersection TECH" }]} value={f.edition} onChange={v => set("edition", v)} />
+              <RadioGroup options={[{ value: "intersection_4", label: "Intersection 4.0 General" }, { value: "intersection_tech", label: "Intersection TECH" }]} value={f.edition} onChange={v => set("edition", v)} />
             </FormField>
             <FormField label="Name of Mentor" required>
               <input className="input-field" value={f.mentor_name} onChange={e => set("mentor_name", e.target.value)} placeholder="Your mentor's name" />
@@ -5199,7 +5055,8 @@ function MenteeFirstMeetingForm({ onBack, onSubmit }) {
 
 // ── Mentee Mid-Program Form ────────────────────────────────────
 function MenteeMidProgramForm({ onBack, onSubmit }) {
-  const { profile, showSuccess, showError } = useAuth();
+  const { profile } = useAuth();
+  const { showSuccess, showError } = useToast();
   const [saving, setSaving] = useState(false);
   const [f, setF] = useState({
     field_of_study_update: "", university_update: "", employer_update: "", job_title_update: "",
@@ -5215,17 +5072,12 @@ function MenteeMidProgramForm({ onBack, onSubmit }) {
 
   const handleSubmit = async () => {
     if (!f.num_meetings || !f.avg_meeting_duration) { showError("Please fill required fields."); return; }
-    if (!profile?.id) { showError("Profile not loaded. Please refresh the page."); return; }
     setSaving(true);
-    await new Promise(r => setTimeout(r, 0));
     try {
-      await Promise.race([
-        db.saveAssessment({ seeker_id: profile.id, form_type: "mentee_mid_program", data: f }),
-        new Promise((_, rej) => setTimeout(() => rej(new Error("Request timed out")), 15000)),
-      ]);
+      await db.saveAssessment({ seeker_id: profile.id, form_type: "mentee_mid_program", data: f });
       showSuccess("Mid-program assessment submitted! Thank you.");
       onSubmit();
-    } catch (e) { showError(e?.message || "Submission failed. Please try again."); }
+    } catch (e) { showError("Error: " + e.message); }
     finally { setSaving(false); }
   };
 
@@ -5311,7 +5163,8 @@ function MenteeMidProgramForm({ onBack, onSubmit }) {
 
 // ── Mentee Final Assessment Form ──────────────────────────────
 function MenteeFinalForm({ onBack, onSubmit }) {
-  const { profile, showSuccess, showError } = useAuth();
+  const { profile } = useAuth();
+  const { showSuccess, showError } = useToast();
   const [saving, setSaving] = useState(false);
   const [f, setF] = useState({
     grad_program: "", field_of_study: "", university: "", job_position: "", company: "",
@@ -5325,17 +5178,12 @@ function MenteeFinalForm({ onBack, onSubmit }) {
 
   const handleSubmit = async () => {
     if (!f.testimonial || !f.would_recommend) { showError("Please fill the required fields."); return; }
-    if (!profile?.id) { showError("Profile not loaded. Please refresh the page."); return; }
     setSaving(true);
-    await new Promise(r => setTimeout(r, 0));
     try {
-      await Promise.race([
-        db.saveAssessment({ seeker_id: profile.id, form_type: "mentee_final", data: f }),
-        new Promise((_, rej) => setTimeout(() => rej(new Error("Request timed out")), 15000)),
-      ]);
+      await db.saveAssessment({ seeker_id: profile.id, form_type: "mentee_final", data: f });
       showSuccess("Final assessment submitted! Thank you for your journey with us.");
       onSubmit();
-    } catch (e) { showError(e?.message || "Submission failed. Please try again."); }
+    } catch (e) { showError("Error: " + e.message); }
     finally { setSaving(false); }
   };
 
@@ -5349,7 +5197,7 @@ function MenteeFinalForm({ onBack, onSubmit }) {
         </div>
       </div>
       <div style={{ background: "rgba(201,168,76,0.06)", border: "1px solid rgba(201,168,76,0.15)", borderRadius: 12, padding: "14px 18px", marginBottom: 24, fontSize: 13, color: "#8A9BB5", lineHeight: 1.7 }}>
-        As we approach the conclusion of Intersection 5.0, we would like to hear from you one more time about your mentorship journey. Your feedback is crucial for the development of Intersection 6.0.
+        As we approach the conclusion of Intersection 4.0, we would like to hear from you one more time about your mentorship journey. Your feedback is crucial for the development of Intersection 5.0.
       </div>
 
       <div className="card" style={{ padding: 32 }}>
@@ -5482,7 +5330,8 @@ function TrainerAssessments() {
 
 // ── Mentor First Meeting Form ─────────────────────────────────
 function MentorFirstMeetingForm({ onBack, onSubmit }) {
-  const { profile, showSuccess, showError } = useAuth();
+  const { profile } = useAuth();
+  const { showSuccess, showError } = useToast();
   const [saving, setSaving] = useState(false);
   const [f, setF] = useState({
     mentee_name: "", had_first_meeting: "yes",
@@ -5495,17 +5344,12 @@ function MentorFirstMeetingForm({ onBack, onSubmit }) {
 
   const handleSubmit = async () => {
     if (!f.mentee_name) { showError("Please fill required fields."); return; }
-    if (!profile?.id) { showError("Profile not loaded. Please refresh the page."); return; }
     setSaving(true);
-    await new Promise(r => setTimeout(r, 0));
     try {
-      await Promise.race([
-        db.saveAssessment({ trainer_id: profile.id, form_type: "mentor_first_meeting", data: f }),
-        new Promise((_, rej) => setTimeout(() => rej(new Error("Request timed out")), 15000)),
-      ]);
+      await db.saveAssessment({ trainer_id: profile.id, form_type: "mentor_first_meeting", data: f });
       showSuccess("Assessment submitted! Thank you.");
       onSubmit();
-    } catch (e) { showError(e?.message || "Submission failed. Please try again."); }
+    } catch (e) { showError("Error: " + e.message); }
     finally { setSaving(false); }
   };
 
@@ -5519,7 +5363,7 @@ function MentorFirstMeetingForm({ onBack, onSubmit }) {
         </div>
       </div>
       <div style={{ background: "rgba(39,174,96,0.06)", border: "1px solid rgba(39,174,96,0.15)", borderRadius: 12, padding: "14px 18px", marginBottom: 24, fontSize: 13, color: "#8A9BB5", lineHeight: 1.7 }}>
-        Dear Mentor, thank you for participating in INTERSECTION 5.0. We hope your first encounter with your mentee went well. Your input is extremely valuable to evaluate the success of this mentorship journey.
+        Dear Mentor, thank you for participating in INTERSECTION 4.0. We hope your first encounter with your mentee went well. Your input is extremely valuable to evaluate the success of this mentorship journey.
       </div>
 
       <div className="card" style={{ padding: 32 }}>
@@ -5585,7 +5429,8 @@ function MentorFirstMeetingForm({ onBack, onSubmit }) {
 
 // ── Mentor Final Assessment Form ──────────────────────────────
 function MentorFinalForm({ onBack, onSubmit }) {
-  const { profile, showSuccess, showError } = useAuth();
+  const { profile } = useAuth();
+  const { showSuccess, showError } = useToast();
   const [saving, setSaving] = useState(false);
   const [f, setF] = useState({
     field_of_work: "", job_title_company: "",
@@ -5600,17 +5445,12 @@ function MentorFinalForm({ onBack, onSubmit }) {
 
   const handleSubmit = async () => {
     if (!f.testimonial || !f.mentor_next_edition) { showError("Please fill required fields."); return; }
-    if (!profile?.id) { showError("Profile not loaded. Please refresh the page."); return; }
     setSaving(true);
-    await new Promise(r => setTimeout(r, 0));
     try {
-      await Promise.race([
-        db.saveAssessment({ trainer_id: profile.id, form_type: "mentor_final", data: f }),
-        new Promise((_, rej) => setTimeout(() => rej(new Error("Request timed out")), 15000)),
-      ]);
+      await db.saveAssessment({ trainer_id: profile.id, form_type: "mentor_final", data: f });
       showSuccess("Final assessment submitted! Thank you for your incredible contribution.");
       onSubmit();
-    } catch (e) { showError(e?.message || "Submission failed. Please try again."); }
+    } catch (e) { showError("Error: " + e.message); }
     finally { setSaving(false); }
   };
 
@@ -5624,7 +5464,7 @@ function MentorFinalForm({ onBack, onSubmit }) {
         </div>
       </div>
       <div style={{ background: "rgba(201,168,76,0.06)", border: "1px solid rgba(201,168,76,0.15)", borderRadius: 12, padding: "14px 18px", marginBottom: 24, fontSize: 13, color: "#8A9BB5", lineHeight: 1.7 }}>
-        As we approach the conclusion of Intersection 5.0, we would like to hear from you about your overall experience. You are a crucial player in the impact of this program and we extend our deepest thanks for your commitment and inspiring journey shared with your mentee.
+        As we approach the conclusion of Intersection 4.0, we would like to hear from you about your overall experience. You are a crucial player in the impact of this program and we extend our deepest thanks for your commitment and inspiring journey shared with your mentee.
       </div>
 
       <div className="card" style={{ padding: 32 }}>
@@ -5903,7 +5743,8 @@ function ParticipantAnnouncements() {
 
 // ── Compose & Manage Announcements (INJAZ Team + Trainer) ─────
 function ComposeAnnouncements({ senderRole = "injaz" }) {
-  const { profile, session, showSuccess, showError } = useAuth();
+  const { profile, session } = useAuth();
+  const { showSuccess, showError } = useToast();
   const [announcements, setAnnouncements] = useState([]);
   const [loading, setLoading] = useState(true);
   const [composing, setComposing] = useState(false);
@@ -5938,7 +5779,7 @@ function ComposeAnnouncements({ senderRole = "injaz" }) {
       setComposing(false);
       await load();
       showSuccess("Announcement posted!");
-    } catch (e) { showError(e?.message || "Submission failed. Please try again."); }
+    } catch (e) { showError("Error: " + e.message); }
     finally { setPosting(false); }
   };
 
@@ -5948,7 +5789,7 @@ function ComposeAnnouncements({ senderRole = "injaz" }) {
       await db.deleteAnnouncement(id);
       setAnnouncements(prev => prev.filter(a => a.id !== id));
       showSuccess("Deleted.");
-    } catch (e) { showError(e?.message || "Submission failed. Please try again."); }
+    } catch (e) { showError("Error: " + e.message); }
     finally { setDeleting(null); }
   };
 
@@ -6080,12 +5921,26 @@ function ComposeAnnouncements({ senderRole = "injaz" }) {
 }
 
 // ── Notification Bell (unread count) for nav ─────────────────
-
+function useUnreadAnnouncements(session) {
+  const [count, setCount] = useState(0);
+  useEffect(() => {
+    if (!session?.user?.id) return;
+    (async () => {
+      const [anns, reads] = await Promise.all([
+        db.getAnnouncements(),
+        db.getReadAnnouncements(session.user.id),
+      ]);
+      setCount(anns.filter(a => !reads.includes(a.id)).length);
+    })();
+  }, [session?.user?.id]);
+  return count;
+}
 
 
 // ── Invite Management (INJAZ Team only) ──────────────────────
 function InviteManagement() {
-  const { session, showSuccess, showError } = useAuth();
+  const { session } = useAuth();
+  const { showSuccess, showError } = useToast();
   const [invites, setInvites] = useState([]);
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState({ email: "", role: "seeker", full_name: "", note: "" });
@@ -6114,7 +5969,7 @@ function InviteManagement() {
       setForm({ email: "", role: "seeker", full_name: "", note: "" });
       await load();
       showSuccess("Invite created! Share the platform link with them.");
-    } catch (e) { showError(e?.message || "Submission failed. Please try again."); }
+    } catch (e) { showError("Error: " + e.message); }
     finally { setSending(false); }
   };
 
@@ -6271,7 +6126,6 @@ export default function App() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [activePage, setActivePage] = useState("dashboard");
   const { toast, showSuccess, showError, showInfo } = useToast();
-  const unreadAnns = useUnreadAnnouncements(session); // must be top-level
 
   if (!supabase) return <SetupError />;
 
@@ -6383,7 +6237,8 @@ export default function App() {
       { id: "insights", icon: "◑", label: "Market Insights" },
       { id: "checkpoints", icon: "◉", label: "My Checkpoints" },
       { id: "attendance", icon: "≡", label: "My Attendance" },
-      { id: "announcements", icon: "◆", label: "Announcements", badge: unreadAnns > 0 ? unreadAnns : undefined, badgeType: "notif" },
+      { id: "announcements", icon: "◆", label: "Announcements" },
+      { id: "announcements", icon: "◆", label: "Announcements" },
       { id: "assessments", icon: "◈", label: "Assessments" },
       ...(isAdmin ? [{ id: "admin", icon: "✦", label: "Admin Panel" }, { id: "admin-journey", icon: "⊕", label: "Journey Overview" }] : []),
     ];
@@ -6405,7 +6260,7 @@ export default function App() {
     };
     return (
       <AuthCtx.Provider value={{ session, profile, setProfile, role, isAdmin, showSuccess, showError, showInfo }}>
-        <Shell navItems={navItems} userLabel={profile?.full_name || "Participant"} userSub={isAdmin ? "Admin Access" : `Profile ${profile?.profile_score || 20}% complete`} activePage={activePage} setActivePage={setActivePage} session={session} role={role}>
+        <Shell navItems={navItems} userLabel={profile?.full_name || "Participant"} userSub={isAdmin ? "Admin Access" : `Profile ${profile?.profile_score || 20}% complete`} activePage={activePage} setActivePage={setActivePage}>
           {pages[activePage] || pages.dashboard}
         </Shell>
         <Toast toast={toast} />
@@ -6447,7 +6302,7 @@ export default function App() {
       { id: "journey-overview", icon: "◐", label: "Journey Overview" },
       { id: "checkpoints", icon: "◉", label: "Intersection Checkpoints" },
       { id: "attendance", icon: "≡", label: "Attendance" },
-      { id: "announcements", icon: "◆", label: "Announcements", badge: unreadAnns > 0 ? unreadAnns : undefined, badgeType: "notif" },
+      { id: "announcements", icon: "◆", label: "Announcements" },
       { id: "assessments", icon: "◈", label: "Assessments" },
       ...(isAdmin ? [{ id: "admin", icon: "✦", label: "Admin Panel" }] : []),
     ];
@@ -6466,7 +6321,7 @@ export default function App() {
     const typeLabel = trainerType === "mentor" ? "Mentor" : trainerType === "both" ? "Trainer & Mentor" : "Trainer";
     return (
       <AuthCtx.Provider value={{ session, profile, setProfile, role, isAdmin, showSuccess, showError, showInfo }}>
-        <Shell navItems={trainerNav} userLabel={profile?.full_name || typeLabel} userSub={`${typeLabel} · ${profile?.org_name || "INJAZ Lebanon"}`} activePage={activePage} setActivePage={setActivePage} session={session} role={role}>
+        <Shell navItems={trainerNav} userLabel={profile?.full_name || typeLabel} userSub={`${typeLabel} · ${profile?.org_name || "INJAZ Lebanon"}`} activePage={activePage} setActivePage={setActivePage}>
           {trainerPages[activePage] || trainerPages.dashboard}
         </Shell>
         <Toast toast={toast} />
