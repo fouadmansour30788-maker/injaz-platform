@@ -917,63 +917,6 @@ function AuthScreen({ onAuth }) {
   );
 }
 
-// ══════════════════════════════════════════════════════════════
-//  SHELL COMPONENT (Add this)
-// ══════════════════════════════════════════════════════════════
-
-function Shell({ navItems, userLabel, userSub, activePage, setActivePage, children }) {
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
-
-  useEffect(() => {
-    const handleResize = () => setIsMobile(window.innerWidth <= 768);
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
-
-  return (
-    <div style={{ minHeight: "100vh", display: "flex", background: "#080F1E" }}>
-      <style>{globalStyles}</style>
-      <div className={`sidebar ${sidebarOpen ? "open" : ""}`} style={{ 
-        width: 260, background: "#0A1525", borderRight: "1px solid rgba(201,168,76,0.2)", 
-        flexShrink: 0, position: "fixed", height: "100vh", overflowY: "auto", zIndex: 50,
-        transform: isMobile ? (sidebarOpen ? "translateX(0)" : "translateX(-100%)") : "translateX(0)",
-        transition: "transform .3s ease"
-      }}>
-        <div style={{ padding: "24px 20px" }}>
-          <div style={{ marginBottom: 32 }}>
-            <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 20, fontWeight: 700, color: "#C9A84C", marginBottom: 4 }}>INJAZ</div>
-            <div style={{ fontSize: 10, color: "#4A5A72", letterSpacing: 2 }}>LEBANON</div>
-          </div>
-          <nav>
-            {navItems.map(item => (
-              <button key={item.id} className={`nav-item ${activePage === item.id ? "active" : ""}`} onClick={() => { setActivePage(item.id); setSidebarOpen(false); }}>
-                <span className="nav-icon">{item.icon}</span>
-                <span>{item.label}</span>
-              </button>
-            ))}
-          </nav>
-          <div style={{ marginTop: 40, paddingTop: 20, borderTop: "1px solid rgba(201,168,76,0.2)" }}>
-            <div style={{ marginBottom: 12 }}>
-              <div style={{ fontSize: 12, fontWeight: 600, color: "#F0EBE0" }}>{userLabel}</div>
-              <div style={{ fontSize: 10, color: "#4A5A72" }}>{userSub}</div>
-            </div>
-            <button className="btn-ghost" style={{ width: "100%", justifyContent: "center" }} onClick={async () => { await db.signOut(); }}>Sign Out</button>
-          </div>
-        </div>
-      </div>
-      {sidebarOpen && isMobile && <div className="mobile-overlay" onClick={() => setSidebarOpen(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.4)", zIndex: 40 }} />}
-      <div style={{ flex: 1, marginLeft: isMobile ? 0 : 260, padding: "32px 40px", maxWidth: "100%", overflowX: "auto" }}>
-        {isMobile && (
-          <button onClick={() => setSidebarOpen(true)} style={{ background: "none", border: "none", color: "#C9A84C", fontSize: 24, marginBottom: 20, cursor: "pointer" }}>
-            ☰
-          </button>
-        )}
-        {children}
-      </div>
-    </div>
-  );
-}
 
 // ══════════════════════════════════════════════════════════════
 //  SEEKER PAGES
@@ -1073,18 +1016,6 @@ function SeekerDashboard({ setActivePage }) {
           </div>
         </div>
       </div>
-    </div>
-  );
-}
-
-function PageHeader({ title, subtitle, action }) {
-  return (
-    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
-      <div>
-        <h1 style={{ fontSize: 24, fontWeight: 700, color: "#F0EBE0", marginBottom: 4 }}>{title}</h1>
-        <p style={{ fontSize: 13, color: "#8A9BB5" }}>{subtitle}</p>
-      </div>
-      {action && <div>{action}</div>}
     </div>
   );
 }
@@ -6513,6 +6444,7 @@ export default function App() {
       { id: "checkpoints", icon: "◉", label: "My Checkpoints" },
       { id: "attendance", icon: "≡", label: "My Attendance" },
       { id: "announcements", icon: "◆", label: "Announcements" },
+      { id: "announcements", icon: "◆", label: "Announcements" },
       { id: "assessments", icon: "◈", label: "Assessments" },
       ...(isAdmin ? [{ id: "admin", icon: "✦", label: "Admin Panel" }, { id: "admin-journey", icon: "⊕", label: "Journey Overview" }] : []),
     ];
@@ -6665,4 +6597,158 @@ export default function App() {
       </div>
     </div>
   );
+}// ── PageHeader ────────────────────────────────────────────────
+function PageHeader({ title, subtitle, action }) {
+  return (
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 28 }}>
+      <div>
+        <h1 style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 24, fontWeight: 700, color: "#F0EBE0", marginBottom: 4 }}>{title}</h1>
+        {subtitle && <p style={{ color: "#8A9BB5", fontSize: 14 }}>{subtitle}</p>}
+      </div>
+      {action && <div style={{ flexShrink: 0, marginLeft: 16 }}>{action}</div>}
+    </div>
+  );
+}
+
+// ── Shell (sidebar layout) ────────────────────────────────────
+function Shell({ navItems, userLabel, userSub, accentColor = C.primary, children, activePage, setActivePage, session, role }) {
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  return (
+    <div style={{ display: "flex", minHeight: "100vh", background: "#080F1E" }}>
+      <style>{globalStyles}</style>
+
+      {sidebarOpen && <div className="mobile-overlay" onClick={() => setSidebarOpen(false)} />}
+
+      {/* Sidebar */}
+      <div className={"sidebar" + (sidebarOpen ? " open" : "")} style={{
+        width: 230, flexShrink: 0, background: "rgba(10,18,32,0.97)",
+        borderRight: "1px solid rgba(201,168,76,0.12)", display: "flex",
+        flexDirection: "column", padding: "24px 12px", position: "sticky",
+        top: 0, height: "100vh", overflowY: "auto", backdropFilter: "blur(20px)", zIndex: 40,
+      }}>
+        {/* Logo */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "0 6px", marginBottom: 28 }}>
+          <div style={{ width: 36, height: 36, borderRadius: 10, background: "rgba(201,168,76,0.15)", border: "1px solid rgba(201,168,76,0.3)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, color: accentColor, fontWeight: 700 }}>I</div>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "#F0EBE0", letterSpacing: 1 }}>INJAZ</div>
+            <div style={{ fontSize: 9, color: "#4A5A72", letterSpacing: 1.5, textTransform: "uppercase" }}>Career Platform</div>
+          </div>
+        </div>
+
+        {/* User info */}
+        <div style={{ padding: "10px", marginBottom: 20, background: "rgba(255,255,255,0.03)", borderRadius: 10, border: "1px solid rgba(255,255,255,0.06)" }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: "#F0EBE0", marginBottom: 2 }}>{userLabel}</div>
+          <div style={{ fontSize: 11, color: accentColor }}>{userSub}</div>
+        </div>
+
+        {/* Nav */}
+        <nav style={{ flex: 1, display: "flex", flexDirection: "column", gap: 2 }}>
+          {navItems.map(item => (
+            <button key={item.id} className={"nav-item" + (activePage === item.id ? " active" : "")}
+              onClick={() => { setActivePage(item.id); setSidebarOpen(false); }}
+              style={{ fontFamily: "'DM Sans',sans-serif" }}>
+              <span className="nav-icon">{item.icon}</span>
+              <span style={{ flex: 1 }}>{item.label}</span>
+              {item.badge && (
+                item.badgeType === "notif"
+                  ? <span style={{ minWidth: 18, height: 18, borderRadius: 9, background: "#C8392B", color: "#fff", fontSize: 10, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 4px" }}>{item.badge}</span>
+                  : <span style={{ fontSize: 11, background: "rgba(201,168,76,0.2)", color: "#C9A84C", borderRadius: 10, padding: "1px 7px", fontWeight: 700, border: "1px solid rgba(201,168,76,0.3)" }}>{item.badge}</span>
+              )}
+            </button>
+          ))}
+        </nav>
+
+        {/* Sign out */}
+        <button className="nav-item" onClick={async () => { await supabase.auth.signOut(); window.location.reload(); }}
+          style={{ marginTop: 12, color: "#C8392B", fontFamily: "'DM Sans',sans-serif" }}>
+          <span className="nav-icon">&#x2192;</span> Sign Out
+        </button>
+      </div>
+
+      {/* Main */}
+      <div style={{ flex: 1, overflowX: "hidden" }}>
+        <div style={{ maxWidth: 1100, margin: "0 auto", padding: "32px 28px" }}>
+          {children}
+        </div>
+      </div>
+
+      {/* Announcement popup for participants & trainers */}
+      {session && role && role !== "injaz_team" && role !== "employer" && (
+        <AnnouncementPopupManager
+          session={session}
+          role={role}
+          onNavigateToAnnouncements={() => setActivePage("announcements")}
+        />
+      )}
+    </div>
+  );
+}
+
+// ── Announcement popup components ─────────────────────────────
+function useAnnouncementRealtime(session, role, onNew) {
+  useEffect(() => {
+    if (!supabase || !session?.user?.id || role === "injaz_team") return;
+    const channel = supabase
+      .channel("announcements-realtime")
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "announcements" }, (payload) => {
+        const ann = payload.new;
+        const isForMe =
+          ann.target_role === "all" ||
+          (role === "seeker" && (ann.target_role === "seeker" || ann.target_role === "all")) ||
+          (role === "trainer" && (ann.target_role === "trainer" || ann.target_role === "all"));
+        if (isForMe) onNew(ann);
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [session?.user?.id, role]);
+}
+
+function AnnouncementPopup({ ann, onClose, onView }) {
+  const [hiding, setHiding] = useState(false);
+  const DURATION = 8000;
+  useEffect(() => {
+    const t = setTimeout(() => { setHiding(true); setTimeout(onClose, 320); }, DURATION);
+    return () => clearTimeout(t);
+  }, []);
+  const dismiss = () => { setHiding(true); setTimeout(onClose, 320); };
+  return (
+    <div style={{
+      position: "fixed", bottom: 80, right: 24, width: 340, maxWidth: "calc(100vw - 48px)",
+      background: "rgba(10,21,37,0.97)", border: "1px solid rgba(201,168,76,0.4)",
+      borderRadius: 14, boxShadow: "0 20px 60px rgba(0,0,0,0.7)", backdropFilter: "blur(24px)",
+      zIndex: 9999, overflow: "hidden",
+      animation: hiding ? "slideOutRight .3s ease forwards" : "slideInRight .4s cubic-bezier(.22,1,.36,1) both",
+    }}>
+      <div style={{ height: 3, background: "linear-gradient(90deg,#C9A84C,#E8C96A)" }} />
+      <div style={{ padding: "16px 18px" }}>
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 10 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{ width: 36, height: 36, borderRadius: 10, background: "rgba(201,168,76,0.15)", border: "1px solid rgba(201,168,76,0.3)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>◆</div>
+            <div>
+              <div style={{ fontSize: 11, color: "#C9A84C", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 2 }}>New Announcement</div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: "#F0EBE0", lineHeight: 1.3 }}>{ann.title}</div>
+            </div>
+          </div>
+          <button onClick={dismiss} style={{ background: "none", border: "none", color: "#4A5A72", cursor: "pointer", fontSize: 18, lineHeight: 1, padding: "2px 4px", flexShrink: 0 }}>x</button>
+        </div>
+        <p style={{ fontSize: 13, color: "#8A9BB5", margin: "0 0 14px 46px", lineHeight: 1.5 }}>{ann.body}</p>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginLeft: 46 }}>
+          <span style={{ fontSize: 11, color: "#4A5A72" }}>By {ann.sender_name || "INJAZ Team"}</span>
+          <button onClick={() => { onView(); dismiss(); }} style={{ fontSize: 12, fontWeight: 600, color: "#C9A84C", background: "rgba(201,168,76,0.1)", border: "1px solid rgba(201,168,76,0.25)", borderRadius: 8, padding: "5px 12px", cursor: "pointer" }}>View</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AnnouncementPopupManager({ session, role, onNavigateToAnnouncements }) {
+  const [queue, setQueue] = useState([]);
+  useAnnouncementRealtime(session, role, (ann) => {
+    setQueue(prev => [...prev, { ...ann, _key: Date.now() + Math.random() }]);
+  });
+  const remove = (key) => setQueue(prev => prev.filter(a => a._key !== key));
+  const current = queue[queue.length - 1];
+  if (!current) return null;
+  return <AnnouncementPopup key={current._key} ann={current} onClose={() => remove(current._key)} onView={onNavigateToAnnouncements} />;
 }
