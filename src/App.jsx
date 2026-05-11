@@ -1020,6 +1020,68 @@ function SeekerDashboard({ setActivePage }) {
   );
 }
 
+// ══════════════════════════════════════════════════════════════
+//  SHELL COMPONENT (Missing - Add This)
+// ══════════════════════════════════════════════════════════════
+
+function Shell({ navItems, userLabel, userSub, activePage, setActivePage, children }) {
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth <= 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  return (
+    <div style={{ minHeight: "100vh", display: "flex", background: "#080F1E" }}>
+      {/* Sidebar */}
+      <div className={`sidebar ${sidebarOpen ? "open" : ""}`} style={{ 
+        width: 260, background: "#0A1525", borderRight: "1px solid rgba(201,168,76,0.2)", 
+        flexShrink: 0, position: "fixed", height: "100vh", overflowY: "auto", zIndex: 50,
+        transform: isMobile ? (sidebarOpen ? "translateX(0)" : "translateX(-100%)") : "translateX(0)",
+        transition: "transform .3s ease"
+      }}>
+        <div style={{ padding: "24px 20px" }}>
+          <div style={{ marginBottom: 32 }}>
+            <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 20, fontWeight: 700, color: "#C9A84C", marginBottom: 4 }}>INJAZ</div>
+            <div style={{ fontSize: 10, color: "#4A5A72", letterSpacing: 2 }}>LEBANON</div>
+          </div>
+          <nav>
+            {navItems.map(item => (
+              <button key={item.id} className={`nav-item ${activePage === item.id ? "active" : ""}`} onClick={() => { setActivePage(item.id); setSidebarOpen(false); }}>
+                <span className="nav-icon">{item.icon}</span>
+                <span>{item.label}</span>
+              </button>
+            ))}
+          </nav>
+          <div style={{ marginTop: 40, paddingTop: 20, borderTop: "1px solid rgba(201,168,76,0.2)" }}>
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: "#F0EBE0" }}>{userLabel}</div>
+              <div style={{ fontSize: 10, color: "#4A5A72" }}>{userSub}</div>
+            </div>
+            <button className="btn-ghost" style={{ width: "100%", justifyContent: "center" }} onClick={async () => { await db.signOut(); }}>Sign Out</button>
+          </div>
+        </div>
+      </div>
+
+      {/* Mobile overlay */}
+      {sidebarOpen && isMobile && <div className="mobile-overlay" onClick={() => setSidebarOpen(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.4)", zIndex: 40 }} />}
+
+      {/* Main content */}
+      <div style={{ flex: 1, marginLeft: isMobile ? 0 : 260, padding: "32px 40px", maxWidth: "100%", overflowX: "auto" }}>
+        {isMobile && (
+          <button onClick={() => setSidebarOpen(true)} style={{ background: "none", border: "none", color: "#C9A84C", fontSize: 24, marginBottom: 20, cursor: "pointer" }}>
+            ☰
+          </button>
+        )}
+        {children}
+      </div>
+    </div>
+  );
+}
+
 // ── Seeker Profile ────────────────────────────────────────────
 function SeekerProfile() {
   const { profile, setProfile } = useAuth();
