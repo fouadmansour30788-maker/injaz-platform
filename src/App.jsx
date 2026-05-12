@@ -301,7 +301,6 @@ const db = {
     if (error) throw error;
     return data;
   },
-  async signOut() { await supabase.auth.signOut(); window.location.href = "/"; },
   async getSession() { const { data } = await supabase.auth.getSession(); return data.session; },
   async getSeekerProfile(uid) {
     const { data } = await supabase.from("job_seekers").select("*").eq("user_id", uid).single();
@@ -311,16 +310,29 @@ const db = {
     const { data } = await supabase.from("employers").select("*").eq("user_id", uid).single();
     return data;
   },
+  async getTrainerProfile(uid) {
+    const { data } = await supabase.from("trainers").select("*").eq("user_id", uid).single();
+    return data;
+  },
+  async getInjazTeamProfile(uid) {
+    const { data } = await supabase.from("injaz_team").select("*").eq("user_id", uid).single();
+    return data;
+  },
   async updateSeekerProfile(id, updates) {
-    // Remove fields that don't exist in DB to avoid errors
     const { journey_stage, journey_data, journey_updated_at, ...safeUpdates } = updates;
-    const { error } = await supabase.from("job_seekers")
-      .update({ ...safeUpdates, updated_at: new Date().toISOString() })
-      .eq("id", id);
+    const { error } = await supabase.from("job_seekers").update({ ...safeUpdates, updated_at: new Date().toISOString() }).eq("id", id);
     if (error) throw error;
   },
   async updateEmployerProfile(id, updates) {
     const { error } = await supabase.from("employers").update({ ...updates, updated_at: new Date().toISOString() }).eq("id", id);
+    if (error) throw error;
+  },
+  async updateTrainerProfile(id, updates) {
+    const { error } = await supabase.from("trainers").update({ ...updates, updated_at: new Date().toISOString() }).eq("id", id);
+    if (error) throw error;
+  },
+  async updateInjazTeamProfile(id, updates) {
+    const { error } = await supabase.from("injaz_team").update({ ...updates, updated_at: new Date().toISOString() }).eq("id", id);
     if (error) throw error;
   },
   async getSeekerSkills(seekerId) {
@@ -328,13 +340,23 @@ const db = {
     return (data || []).map(s => s.skill_name);
   },
   async upsertSkills(seekerId, skills) {
-    await supabase.from("seeker_skills").delete().eq("seeker_id", seekerId);
+    const { error: delErr } = await supabase.from("seeker_skills").delete().eq("seeker_id", seekerId);
+    if (delErr) throw delErr;
     if (skills.length > 0) {
-      await supabase.from("seeker_skills").insert(skills.map(s => ({ seeker_id: seekerId, skill_name: s })));
+      const { error: insErr } = await supabase.from("seeker_skills").insert(skills.map(s => ({ seeker_id: seekerId, skill_name: s })));
+      if (insErr) throw insErr;
     }
+  },
+  async getAllSeekerSkills() {
+    const { data } = await supabase.from("seeker_skills").select("skill_name");
+    return (data || []).map(s => s.skill_name);
   },
   async getActivePostings() {
     const { data } = await supabase.from("postings").select("*, employers(org_name,governorate)").eq("status", "active").order("created_at", { ascending: false });
+    return data || [];
+  },
+  async getAllPostings() {
+    const { data } = await supabase.from("postings").select("*, employers(org_name)").order("created_at", { ascending: false });
     return data || [];
   },
   async getEmployerPostings(employerId) {
@@ -349,6 +371,9 @@ const db = {
   async updatePosting(id, updates) {
     const { error } = await supabase.from("postings").update(updates).eq("id", id);
     if (error) throw error;
+  },
+  async updatePostingStatus(id, status) {
+    await supabase.from("postings").update({ status }).eq("id", id);
   },
   async getApplications(seekerId) {
     const { data } = await supabase.from("applications").select("*, postings(title, employers(org_name))").eq("seeker_id", seekerId).order("created_at", { ascending: false });
@@ -366,7 +391,6 @@ const db = {
     ]);
     return { seekers: seekers.count || 0, postings: postings.count || 0, applications: apps.count || 0 };
   },
-  // Admin
   async getAllUsers() {
     const [seekers, employers] = await Promise.all([
       supabase.from("job_seekers").select("*").order("created_at", { ascending: false }),
@@ -374,28 +398,22 @@ const db = {
     ]);
     return { seekers: seekers.data || [], employers: employers.data || [] };
   },
-  async getAllPostings() {
-    const { data } = await supabase.from("postings").select("*, employers(org_name)").order("created_at", { ascending: false });
-    return data || [];
-  },
-  async updatePostingStatus(id, status) {
-    await supabase.from("postings").update({ status }).eq("id", id);
-  },
-  // Journey
   async getJourney(seekerId) {
     const { data } = await supabase.from("job_seekers").select("journey_stage, journey_data, journey_updated_at").eq("id", seekerId).single();
     return data;
   },
+  async updateJourney(seekerId, stage, journeyData) {
+    const { error } = await supabase.from("job_seekers").update({ journey_stage: stage, journey_data: journeyData, journey_updated_at: new Date().toISOString() }).eq("id", seekerId);
+    if (error) throw error;
+  },
   async getProgramCheckpoint() {
     try {
-      const { data } = await supabase.from("program_settings")
-        .select("*").eq("key", "intersection_checkpoint").single();
+      const { data } = await supabase.from("program_settings").select("*").eq("key", "intersection_checkpoint").single();
       return data;
     } catch (e) { return null; }
   },
   async updateProgramCheckpoint(checkpointId, status, note) {
-    const { error } = await supabase.from("program_settings")
-      .upsert({ key: "intersection_checkpoint", value: checkpointId, meta: { status, note, updated_at: new Date().toISOString() } }, { onConflict: "key" });
+    const { error } = await supabase.from("program_settings").upsert({ key: "intersection_checkpoint", value: checkpointId, meta: { status, note, updated_at: new Date().toISOString() } }, { onConflict: "key" });
     if (error) throw error;
   },
   async getMyAttendance(seekerId) {
@@ -416,145 +434,16 @@ const db = {
     if (error) throw error;
   },
   async getAllAttendance() {
-    const { data } = await supabase.from("attendance")
-      .select("*, job_seekers(full_name, governorate, sector)").order("date", { ascending: false });
+    const { data } = await supabase.from("attendance").select("*, job_seekers(full_name, governorate, sector)").order("date", { ascending: false });
     return data || [];
   },
-  async checkAllowedEmail(email) {
-    const { data } = await supabase.from("allowed_emails")
-      .select("*").eq("email", email.toLowerCase().trim()).single();
-    return data;
+  async verifyAttendanceSession(id, verifiedBy) {
+    const { error } = await supabase.from("attendance").update({ verified: true, verified_by: verifiedBy, verified_at: new Date().toISOString() }).eq("id", id);
+    if (error) throw error;
   },
-  async getAllowedEmails() {
-    const { data } = await supabase.from("allowed_emails").select("*").order("created_at", { ascending: false });
+  async getAssignedSeekers(trainerId) {
+    const { data } = await supabase.from("trainer_assignments").select("*, job_seekers(*)").eq("trainer_id", trainerId);
     return data || [];
-  },
-  async addAllowedEmail(email, role, name) {
-    const { error } = await supabase.from("allowed_emails")
-      .insert({ email: email.toLowerCase().trim(), role, full_name: name });
-    if (error) throw error;
-  },
-  async removeAllowedEmail(id) {
-    const { error } = await supabase.from("allowed_emails").delete().eq("id", id);
-    if (error) throw error;
-  },
-  async checkInvite(email) {
-    const { data } = await supabase.from("invites")
-      .select("*").eq("email", email.toLowerCase().trim()).eq("used", false).single();
-    return data;
-  },
-  async markInviteUsed(email) {
-    await supabase.from("invites").update({ used: true, used_at: new Date().toISOString() })
-      .eq("email", email.toLowerCase().trim());
-  },
-  async createInvite(invite) {
-    const { data, error } = await supabase.from("invites").insert(invite).select().single();
-    if (error) throw error;
-    return data;
-  },
-  async getInvites() {
-    const { data } = await supabase.from("invites").select("*").order("created_at", { ascending: false });
-    return data || [];
-  },
-  async deleteInvite(id) {
-    const { error } = await supabase.from("invites").delete().eq("id", id);
-    if (error) throw error;
-  },
-  async getAnnouncements() {
-    const { data } = await supabase.from("announcements")
-      .select("*").order("created_at", { ascending: false });
-    return data || [];
-  },
-  async createAnnouncement(ann) {
-    const { data, error } = await supabase.from("announcements").insert(ann).select().single();
-    if (error) throw error;
-    return data;
-  },
-  async deleteAnnouncement(id) {
-    const { error } = await supabase.from("announcements").delete().eq("id", id);
-    if (error) throw error;
-  },
-  async markAnnouncementRead(annId, userId) {
-    await supabase.from("announcement_reads").upsert({ announcement_id: annId, user_id: userId }, { onConflict: "announcement_id,user_id" });
-  },
-  async getReadAnnouncements(userId) {
-    const { data } = await supabase.from("announcement_reads").select("announcement_id").eq("user_id", userId);
-    return (data || []).map(r => r.announcement_id);
-  },
-  async saveAssessment(assessment) {
-    const { error } = await supabase.from("assessments").insert(assessment);
-    if (error) throw error;
-  },
-  async getMyAssessments(userId) {
-    const { data } = await supabase.from("assessments").select("*").eq("user_id", userId);
-    return data || [];
-  },
-  async getAllAssessments() {
-    const { data } = await supabase.from("assessments")
-      .select("*, job_seekers(full_name), trainers(full_name)")
-      .order("created_at", { ascending: false });
-    return data || [];
-  },
-  async checkAllowedEmail(email) {
-    const { data } = await supabase.from("allowed_emails")
-      .select("*").eq("email", email.toLowerCase().trim()).single();
-    return data;
-  },
-  async getAllowedEmails() {
-    const { data } = await supabase.from("allowed_emails").select("*").order("created_at", { ascending: false });
-    return data || [];
-  },
-  async addAllowedEmail(email, role, name) {
-    const { error } = await supabase.from("allowed_emails")
-      .insert({ email: email.toLowerCase().trim(), role, full_name: name });
-    if (error) throw error;
-  },
-  async removeAllowedEmail(id) {
-    const { error } = await supabase.from("allowed_emails").delete().eq("id", id);
-    if (error) throw error;
-  },
-  async checkInvite(email) {
-    const { data } = await supabase.from("invites")
-      .select("*").eq("email", email.toLowerCase().trim()).eq("used", false).single();
-    return data;
-  },
-  async markInviteUsed(email) {
-    await supabase.from("invites").update({ used: true, used_at: new Date().toISOString() })
-      .eq("email", email.toLowerCase().trim());
-  },
-  async createInvite(invite) {
-    const { data, error } = await supabase.from("invites").insert(invite).select().single();
-    if (error) throw error;
-    return data;
-  },
-  async getInvites() {
-    const { data } = await supabase.from("invites").select("*").order("created_at", { ascending: false });
-    return data || [];
-  },
-  async deleteInvite(id) {
-    const { error } = await supabase.from("invites").delete().eq("id", id);
-    if (error) throw error;
-  },
-  async getAnnouncements() {
-    const { data } = await supabase.from("announcements")
-      .select("*").order("created_at", { ascending: false });
-    return data || [];
-  },
-  async createAnnouncement(ann) {
-    const { data, error } = await supabase.from("announcements").insert(ann).select().single();
-    if (error) throw error;
-    return data;
-  },
-  async deleteAnnouncement(id) {
-    const { error } = await supabase.from("announcements").delete().eq("id", id);
-    if (error) throw error;
-  },
-  async markAnnouncementRead(annId, userId) {
-    await supabase.from("announcement_reads").upsert({ announcement_id: annId, user_id: userId }, { onConflict: "announcement_id,user_id" });
-  },
-  async getReadAnnouncements(userId) {
-    const { data } = await supabase.from("announcement_reads").select("announcement_id").eq("user_id", userId);
-    return (data || []).map(r => r.announcement_id);
   },
   async saveAssessment(assessment) {
     const { data, error } = await supabase.from("assessments").insert(assessment).select().single();
@@ -567,13 +456,11 @@ const db = {
     return data || [];
   },
   async getAllAssessments() {
-    const { data } = await supabase.from("assessments")
-      .select("*, job_seekers(full_name), trainers(full_name)").order("created_at", { ascending: false });
+    const { data } = await supabase.from("assessments").select("*, job_seekers(full_name), trainers(full_name)").order("created_at", { ascending: false });
     return data || [];
   },
   async checkAllowedEmail(email) {
-    const { data } = await supabase.from("allowed_emails")
-      .select("*").eq("email", email.toLowerCase().trim()).single();
+    const { data } = await supabase.from("allowed_emails").select("*").eq("email", email.toLowerCase().trim()).single();
     return data;
   },
   async getAllowedEmails() {
@@ -581,8 +468,7 @@ const db = {
     return data || [];
   },
   async addAllowedEmail(email, role, name) {
-    const { error } = await supabase.from("allowed_emails")
-      .insert({ email: email.toLowerCase().trim(), role, full_name: name });
+    const { error } = await supabase.from("allowed_emails").insert({ email: email.toLowerCase().trim(), role, full_name: name });
     if (error) throw error;
   },
   async removeAllowedEmail(id) {
@@ -590,13 +476,11 @@ const db = {
     if (error) throw error;
   },
   async checkInvite(email) {
-    const { data } = await supabase.from("invites")
-      .select("*").eq("email", email.toLowerCase().trim()).eq("used", false).single();
+    const { data } = await supabase.from("invites").select("*").eq("email", email.toLowerCase().trim()).eq("used", false).single();
     return data;
   },
   async markInviteUsed(email) {
-    await supabase.from("invites").update({ used: true, used_at: new Date().toISOString() })
-      .eq("email", email.toLowerCase().trim());
+    await supabase.from("invites").update({ used: true, used_at: new Date().toISOString() }).eq("email", email.toLowerCase().trim());
   },
   async createInvite(invite) {
     const { data, error } = await supabase.from("invites").insert(invite).select().single();
@@ -612,8 +496,7 @@ const db = {
     if (error) throw error;
   },
   async getAnnouncements() {
-    const { data } = await supabase.from("announcements")
-      .select("*").order("created_at", { ascending: false });
+    const { data } = await supabase.from("announcements").select("*").order("created_at", { ascending: false });
     return data || [];
   },
   async createAnnouncement(ann) {
@@ -632,47 +515,19 @@ const db = {
     const { data } = await supabase.from("announcement_reads").select("announcement_id").eq("user_id", userId);
     return (data || []).map(r => r.announcement_id);
   },
-  async saveAssessment(assessment) {
-    const { data, error } = await supabase.from("assessments").insert(assessment).select().single();
-    if (error) throw error;
-    return data;
-  },
-  async getMyAssessments(userId) {
-    const { data } = await supabase.from("assessments").select("*").eq("user_id", userId);
-    return data || [];
-  },
-  async getAllAssessments() {
-    const { data } = await supabase.from("assessments")
-      .select("*, job_seekers(full_name), trainers(full_name)").order("created_at", { ascending: false });
-    return data || [];
-  },
   async saveReflection(reflection) {
     const { error } = await supabase.from("session_reflections").insert(reflection);
     if (error) throw error;
   },
   async getMyReflections(seekerId) {
-    const { data } = await supabase.from("session_reflections")
-      .select("*").eq("seeker_id", seekerId).order("created_at", { ascending: false });
+    const { data } = await supabase.from("session_reflections").select("*").eq("seeker_id", seekerId).order("created_at", { ascending: false });
     return data || [];
   },
   async getAllReflections() {
-    const { data } = await supabase.from("session_reflections")
-      .select("*, job_seekers(full_name)").order("created_at", { ascending: false });
+    const { data } = await supabase.from("session_reflections").select("*, job_seekers(full_name)").order("created_at", { ascending: false });
     return data || [];
   },
-  async verifyAttendanceSession(id, verifiedBy) {
-    const { error } = await supabase.from("attendance").update({ verified: true, verified_by: verifiedBy, verified_at: new Date().toISOString() }).eq("id", id);
-    if (error) throw error;
-  },
-  async updateJourney(seekerId, stage, journeyData) {
-    const { error } = await supabase.from("job_seekers").update({
-      journey_stage: stage, journey_data: journeyData,
-      journey_updated_at: new Date().toISOString()
-    }).eq("id", seekerId);
-    if (error) throw error;
-  },
-};
-
+}
 // ── AI layer ──────────────────────────────────────────────────
 const ai = {
   async generateCoverLetter(jobTitle, orgName, skills, name, candidateSkills, tone, language) {
@@ -766,6 +621,81 @@ function StatCard({ label, value, icon, color, delay = 0 }) {
       <div style={{ fontSize: 12, color: "#8A9BB5", fontWeight: 500 }}>{label}</div>
     </div>
   );
+}
+
+
+// ── PageHeader ────────────────────────────────────────────────
+function PageHeader({ title, subtitle, action }) {
+  return (
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 28 }}>
+      <div>
+        <h1 style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 24, fontWeight: 700, color: "#F0EBE0", marginBottom: 4 }}>{title}</h1>
+        {subtitle && <p style={{ color: "#8A9BB5", fontSize: 14 }}>{subtitle}</p>}
+      </div>
+      {action && <div style={{ flexShrink: 0, marginLeft: 16 }}>{action}</div>}
+    </div>
+  );
+}
+
+// ── Shell ─────────────────────────────────────────────────────
+function Shell({ navItems, userLabel, userSub, accentColor = C.primary, children, activePage, setActivePage, session, role }) {
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  return (
+    <div style={{ display: "flex", minHeight: "100vh", background: "#080F1E" }}>
+      <style>{globalStyles}</style>
+      {sidebarOpen && <div className="mobile-overlay" onClick={() => setSidebarOpen(false)} />}
+      <div className={"sidebar" + (sidebarOpen ? " open" : "")} style={{ width: 230, flexShrink: 0, background: "rgba(10,18,32,0.97)", borderRight: "1px solid rgba(201,168,76,0.12)", display: "flex", flexDirection: "column", padding: "24px 12px", position: "sticky", top: 0, height: "100vh", overflowY: "auto", backdropFilter: "blur(20px)", zIndex: 40 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "0 6px", marginBottom: 28 }}>
+          <div style={{ width: 36, height: 36, borderRadius: 10, background: "rgba(201,168,76,0.15)", border: "1px solid rgba(201,168,76,0.3)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, color: accentColor, fontWeight: 700 }}>I</div>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "#F0EBE0", letterSpacing: 1 }}>INJAZ</div>
+            <div style={{ fontSize: 9, color: "#4A5A72", letterSpacing: 1.5, textTransform: "uppercase" }}>Career Platform</div>
+          </div>
+        </div>
+        <div style={{ padding: "10px", marginBottom: 20, background: "rgba(255,255,255,0.03)", borderRadius: 10, border: "1px solid rgba(255,255,255,0.06)" }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: "#F0EBE0", marginBottom: 2 }}>{userLabel}</div>
+          <div style={{ fontSize: 11, color: accentColor }}>{userSub}</div>
+        </div>
+        <nav style={{ flex: 1, display: "flex", flexDirection: "column", gap: 2 }}>
+          {navItems.map(item => (
+            <button key={item.id + item.label} className={"nav-item" + (activePage === item.id ? " active" : "")}
+              onClick={() => { setActivePage(item.id); setSidebarOpen(false); }}
+              style={{ fontFamily: "'DM Sans',sans-serif" }}>
+              <span className="nav-icon">{item.icon}</span>
+              <span style={{ flex: 1 }}>{item.label}</span>
+              {item.badge > 0 && <span style={{ minWidth: 18, height: 18, borderRadius: 9, background: "#C8392B", color: "#fff", fontSize: 10, fontWeight: 800, display: "inline-flex", alignItems: "center", justifyContent: "center", padding: "0 4px" }}>{item.badge}</span>}
+            </button>
+          ))}
+        </nav>
+        <button className="nav-item" onClick={async () => {
+            try { await supabase.auth.signOut(); } catch (e) {}
+            window.location.href = window.location.origin;
+          }} style={{ marginTop: 12, color: "#C8392B", fontFamily: "'DM Sans',sans-serif" }}>
+          <span className="nav-icon">&#x2192;</span> Sign Out
+        </button>
+      </div>
+      <div style={{ flex: 1, overflowX: "hidden" }}>
+        <div style={{ maxWidth: 1100, margin: "0 auto", padding: "32px 28px" }}>
+          {children}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── useUnreadAnnouncements ────────────────────────────────────
+function useUnreadAnnouncements(session) {
+  const [count, setCount] = useState(0);
+  useEffect(() => {
+    if (!session?.user?.id) return;
+    (async () => {
+      try {
+        const [anns, reads] = await Promise.all([db.getAnnouncements(), db.getReadAnnouncements(session.user.id)]);
+        setCount(anns.filter(a => !reads.includes(a.id)).length);
+      } catch (_) {}
+    })();
+  }, [session?.user?.id]);
+  return count;
 }
 
 // ── Setup error screen ────────────────────────────────────────
@@ -1022,8 +952,7 @@ function SeekerDashboard({ setActivePage }) {
 
 // ── Seeker Profile ────────────────────────────────────────────
 function SeekerProfile() {
-  const { profile, setProfile } = useAuth();
-  const { showSuccess, showError } = useToast();
+  const { profile, setProfile, showSuccess, showError } = useAuth();
   const [form, setForm] = useState({
     full_name: "", phone: "", governorate: "", nationality: "Lebanese",
     employment_status: "seeking", education_level: "bachelor", years_experience: 0,
@@ -1059,18 +988,21 @@ function SeekerProfile() {
   };
 
   const handleSave = async () => {
-    if (!profile?.id) {
-      showError("Profile not ready. Please refresh the page.");
-      return;
-    }
+    if (!profile?.id) { showError("Profile not ready. Please refresh."); return; }
     setSaving(true);
+    await new Promise(r => setTimeout(r, 0));
     try {
       const score = computeScore(form, skills);
-      await db.updateSeekerProfile(profile.id, { ...form, years_experience: parseInt(form.years_experience) || 0, profile_score: score });
-      await db.upsertSkills(profile.id, skills);
+      await Promise.race([
+        (async () => {
+          await db.updateSeekerProfile(profile.id, { ...form, years_experience: parseInt(form.years_experience) || 0, profile_score: score });
+          await db.upsertSkills(profile.id, skills);
+        })(),
+        new Promise((_, rej) => setTimeout(() => rej(new Error("Save timed out — check connection")), 15000))
+      ]);
       setProfile(p => ({ ...p, ...form, profile_score: score }));
       showSuccess("Profile saved successfully!");
-    } catch (e) { showError(e.message || "Save failed"); }
+    } catch (e) { showError(e.message || "Save failed. Please try again."); }
     finally { setSaving(false); }
   };
 
@@ -1357,9 +1289,10 @@ function CoverLetterAI() {
             <Label>Tone</Label>
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {[["formal", "◆ Formal & Professional"], ["youth", "✦ Youth-Friendly"], ["ngo", "◈ NGO-Focused"]].map(([v, l]) => (
-                <label key={v} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: C.radiusSm, border: `1px solid ${tone === v ? "rgba(201,168,76,0.5)" : "rgba(255,255,255,0.1)"}`, background: tone === v ? "rgba(201,168,76,0.12)" : "rgba(255,255,255,0.04)", cursor: "pointer", fontSize: 13, fontWeight: tone === v ? 600 : 400, color: tone === v ? "#C9A84C" : "#F0EBE0" }}>
-                  <input type="radio" value={v} checked={tone === v} onChange={() => setTone(v)} style={{ display: "none" }} />{l}
-                </label>
+                <button key={v} type="button" onClick={() => setTone(v)}
+                  style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: C.radiusSm, border: `1px solid ${tone === v ? "rgba(201,168,76,0.5)" : "rgba(255,255,255,0.1)"}`, background: tone === v ? "rgba(201,168,76,0.12)" : "rgba(255,255,255,0.04)", cursor: "pointer", fontSize: 13, fontWeight: tone === v ? 600 : 400, color: tone === v ? "#C9A84C" : "#F0EBE0", width: "100%", textAlign: "left", fontFamily: "'DM Sans',sans-serif" }}>
+                  {l}
+                </button>
               ))}
             </div>
           </div>
@@ -3804,15 +3737,15 @@ function CheckpointManager({ isInjazTeam = false }) {
             <div style={{ fontSize: 11, color: "#C9A84C", letterSpacing: 2, textTransform: "uppercase", marginBottom: 20 }}>Select Active Stage</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 24 }}>
               {INTERSECTION_CHECKPOINTS.map(cp => (
-                <label key={cp.id} style={{ display: "flex", alignItems: "center", gap: 16, padding: "16px 20px", borderRadius: 12, border: `1px solid ${form.checkpoint === cp.id ? cp.color + "66" : "rgba(255,255,255,0.08)"}`, background: form.checkpoint === cp.id ? cp.colorLight : "rgba(255,255,255,0.02)", cursor: "pointer", transition: "all .2s" }}>
-                  <input type="radio" value={cp.id} checked={form.checkpoint === cp.id} onChange={() => setForm(f => ({ ...f, checkpoint: cp.id }))} style={{ display: "none" }} />
+                <button key={cp.id} type="button" onClick={() => setForm(f => ({ ...f, checkpoint: cp.id }))}
+                  style={{ display: "flex", alignItems: "center", gap: 16, padding: "16px 20px", borderRadius: 12, border: `1px solid ${form.checkpoint === cp.id ? cp.color + "66" : "rgba(255,255,255,0.08)"}`, background: form.checkpoint === cp.id ? cp.colorLight : "rgba(255,255,255,0.02)", cursor: "pointer", transition: "all .2s", width: "100%", textAlign: "left", fontFamily: "'DM Sans',sans-serif" }}>
                   <div style={{ width: 36, height: 36, borderRadius: "50%", background: form.checkpoint === cp.id ? cp.color : "rgba(255,255,255,0.06)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, color: form.checkpoint === cp.id ? "#080F1E" : cp.color, flexShrink: 0, fontWeight: 700 }}>{cp.icon}</div>
                   <div style={{ flex: 1 }}>
                     <div style={{ fontWeight: 600, fontSize: 15, color: form.checkpoint === cp.id ? cp.color : "#F0EBE0", marginBottom: 2 }}>{cp.label}</div>
                     <div style={{ fontSize: 12, color: "#4A5A72" }}>{cp.period} — {cp.tasks.join(", ")}</div>
                   </div>
                   {form.checkpoint === cp.id && <span style={{ color: cp.color }}>◆</span>}
-                </label>
+                </button>
               ))}
             </div>
 
@@ -4484,8 +4417,7 @@ function AttendanceVerification({ isInjazTeam = false }) {
 
 // ── Mentorship Session Reflection Card Modal ──────────────────
 function ReflectionCardModal({ session, sessionNumber, onClose, onSave }) {
-  const { profile } = useAuth();
-  const { showSuccess, showError } = useToast();
+  const { profile, showSuccess, showError } = useAuth();
   const [saving, setSaving] = useState(false);
   const [rating, setRating] = useState(0);
   const [hoveredRating, setHoveredRating] = useState(0);
@@ -4664,15 +4596,20 @@ function StarRating({ value, onChange, max = 5, labels = [] }) {
 function RadioGroup({ options, value, onChange }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-      {options.map(opt => (
-        <label key={opt.value || opt} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 14px", borderRadius: 10, border: `1px solid ${value === (opt.value || opt) ? "rgba(201,168,76,0.4)" : "rgba(255,255,255,0.08)"}`, background: value === (opt.value || opt) ? "rgba(201,168,76,0.08)" : "rgba(255,255,255,0.02)", cursor: "pointer", transition: "all .2s" }}>
-          <div style={{ width: 16, height: 16, borderRadius: "50%", border: `2px solid ${value === (opt.value || opt) ? "#C9A84C" : "rgba(255,255,255,0.2)"}`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-            {value === (opt.value || opt) && <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#C9A84C" }} />}
-          </div>
-          <input type="radio" value={opt.value || opt} checked={value === (opt.value || opt)} onChange={() => onChange(opt.value || opt)} style={{ display: "none" }} />
-          <span style={{ fontSize: 13, color: value === (opt.value || opt) ? "#C9A84C" : "#F0EBE0" }}>{opt.label || opt}</span>
-        </label>
-      ))}
+      {options.map(opt => {
+        const val = opt.value || opt;
+        const lbl = opt.label || opt;
+        const sel = value === val;
+        return (
+          <button key={val} type="button" onClick={() => onChange(val)}
+            style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 14px", borderRadius: 10, border: `1px solid ${sel ? "rgba(201,168,76,0.4)" : "rgba(255,255,255,0.08)"}`, background: sel ? "rgba(201,168,76,0.08)" : "rgba(255,255,255,0.02)", cursor: "pointer", width: "100%", textAlign: "left", fontFamily: "'DM Sans',sans-serif", transition: "border .15s,background .15s" }}>
+            <div style={{ width: 16, height: 16, borderRadius: "50%", border: `2px solid ${sel ? "#C9A84C" : "rgba(255,255,255,0.2)"}`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              {sel && <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#C9A84C" }} />}
+            </div>
+            <span style={{ fontSize: 13, color: sel ? "#C9A84C" : "#F0EBE0" }}>{lbl}</span>
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -4810,11 +4747,13 @@ function RadioQuestion({ label, sub, options, value, onChange }) {
       {sub && <div style={{ fontSize: 12, color: "#8A9BB5", marginBottom: 12 }}>{sub}</div>}
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {options.map(opt => (
-          <label key={opt} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", borderRadius: 10, border: `1px solid ${value === opt ? "rgba(201,168,76,0.4)" : "rgba(255,255,255,0.08)"}`, background: value === opt ? "rgba(201,168,76,0.08)" : "rgba(255,255,255,0.02)", cursor: "pointer", transition: "all .15s" }}>
-            <input type="radio" checked={value === opt} onChange={() => onChange(opt)} style={{ display: "none" }} />
-            <div style={{ width: 16, height: 16, borderRadius: "50%", border: `2px solid ${value === opt ? "#C9A84C" : "rgba(255,255,255,0.2)"}`, background: value === opt ? "#C9A84C" : "transparent", flexShrink: 0, transition: "all .15s" }} />
+          <button key={opt} type="button" onClick={() => onChange(opt)}
+            style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", borderRadius: 10, border: `1px solid ${value === opt ? "rgba(201,168,76,0.4)" : "rgba(255,255,255,0.08)"}`, background: value === opt ? "rgba(201,168,76,0.08)" : "rgba(255,255,255,0.02)", cursor: "pointer", width: "100%", textAlign: "left", fontFamily: "'DM Sans',sans-serif", transition: "border .15s,background .15s" }}>
+            <div style={{ width: 16, height: 16, borderRadius: "50%", border: `2px solid ${value === opt ? "#C9A84C" : "rgba(255,255,255,0.2)"}`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              {value === opt && <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#C9A84C" }} />}
+            </div>
             <span style={{ fontSize: 13, color: value === opt ? "#C9A84C" : "#8A9BB5" }}>{opt}</span>
-          </label>
+          </button>
         ))}
       </div>
     </div>
@@ -4936,11 +4875,10 @@ function MyAssessments() {
 
 // ── Mentee First Meeting Form ─────────────────────────────────
 function MenteeFirstMeetingForm({ onBack, onSubmit }) {
-  const { profile } = useAuth();
-  const { showSuccess, showError } = useToast();
+  const { profile, showSuccess, showError } = useAuth();
   const [saving, setSaving] = useState(false);
   const [f, setF] = useState({
-    edition: "intersection_4", mentor_name: "", phone: "", field_of_study: "", university: "",
+    edition: "intersection_5", mentor_name: "", phone: "", field_of_study: "", university: "",
     current_employer: "", job_title: "", had_first_meeting: "yes",
     first_meeting_date: "", mentor_encouraging: "", meeting_description: "",
     agreed_on_frequency: "", greatest_strengths: "", major_challenges: "",
@@ -4950,9 +4888,13 @@ function MenteeFirstMeetingForm({ onBack, onSubmit }) {
 
   const handleSubmit = async () => {
     if (!f.mentor_name || !f.had_first_meeting) { showError("Please fill required fields."); return; }
+    if (!profile?.id) { showError("Profile not loaded. Please refresh."); return; }
     setSaving(true);
     try {
-      await db.saveAssessment({ seeker_id: profile.id, form_type: "mentee_first_meeting", data: f });
+      await Promise.race([
+        db.saveAssessment({ seeker_id: profile.id, form_type: "mentee_first_meeting", data: f }),
+        new Promise((_, rej) => setTimeout(() => rej(new Error("Timed out")), 15000))
+      ]);
       showSuccess("Assessment submitted! Thank you.");
       onSubmit();
     } catch (e) { showError("Error: " + e.message); }
@@ -4976,7 +4918,7 @@ function MenteeFirstMeetingForm({ onBack, onSubmit }) {
         <FormSection icon="◆" title="Your Information">
           <div className="grid-2" style={{ gap: 14 }}>
             <FormField label="Edition" required>
-              <RadioGroup options={[{ value: "intersection_4", label: "Intersection 4.0 General" }, { value: "intersection_tech", label: "Intersection TECH" }]} value={f.edition} onChange={v => set("edition", v)} />
+              <RadioGroup options={[{ value: "intersection_5", label: "Intersection 5.0 General" }, { value: "intersection_tech", label: "Intersection TECH" }]} value={f.edition} onChange={v => set("edition", v)} />
             </FormField>
             <FormField label="Name of Mentor" required>
               <input className="input-field" value={f.mentor_name} onChange={e => set("mentor_name", e.target.value)} placeholder="Your mentor's name" />
@@ -5055,8 +4997,7 @@ function MenteeFirstMeetingForm({ onBack, onSubmit }) {
 
 // ── Mentee Mid-Program Form ────────────────────────────────────
 function MenteeMidProgramForm({ onBack, onSubmit }) {
-  const { profile } = useAuth();
-  const { showSuccess, showError } = useToast();
+  const { profile, showSuccess, showError } = useAuth();
   const [saving, setSaving] = useState(false);
   const [f, setF] = useState({
     field_of_study_update: "", university_update: "", employer_update: "", job_title_update: "",
@@ -5072,9 +5013,13 @@ function MenteeMidProgramForm({ onBack, onSubmit }) {
 
   const handleSubmit = async () => {
     if (!f.num_meetings || !f.avg_meeting_duration) { showError("Please fill required fields."); return; }
+    if (!profile?.id) { showError("Profile not loaded. Please refresh."); return; }
     setSaving(true);
     try {
-      await db.saveAssessment({ seeker_id: profile.id, form_type: "mentee_mid_program", data: f });
+      await Promise.race([
+        db.saveAssessment({ seeker_id: profile.id, form_type: "mentee_mid_program", data: f }),
+        new Promise((_, rej) => setTimeout(() => rej(new Error("Timed out")), 15000))
+      ]);
       showSuccess("Mid-program assessment submitted! Thank you.");
       onSubmit();
     } catch (e) { showError("Error: " + e.message); }
@@ -5163,8 +5108,7 @@ function MenteeMidProgramForm({ onBack, onSubmit }) {
 
 // ── Mentee Final Assessment Form ──────────────────────────────
 function MenteeFinalForm({ onBack, onSubmit }) {
-  const { profile } = useAuth();
-  const { showSuccess, showError } = useToast();
+  const { profile, showSuccess, showError } = useAuth();
   const [saving, setSaving] = useState(false);
   const [f, setF] = useState({
     grad_program: "", field_of_study: "", university: "", job_position: "", company: "",
@@ -5178,9 +5122,13 @@ function MenteeFinalForm({ onBack, onSubmit }) {
 
   const handleSubmit = async () => {
     if (!f.testimonial || !f.would_recommend) { showError("Please fill the required fields."); return; }
+    if (!profile?.id) { showError("Profile not loaded. Please refresh."); return; }
     setSaving(true);
     try {
-      await db.saveAssessment({ seeker_id: profile.id, form_type: "mentee_final", data: f });
+      await Promise.race([
+        db.saveAssessment({ seeker_id: profile.id, form_type: "mentee_final", data: f }),
+        new Promise((_, rej) => setTimeout(() => rej(new Error("Timed out")), 15000))
+      ]);
       showSuccess("Final assessment submitted! Thank you for your journey with us.");
       onSubmit();
     } catch (e) { showError("Error: " + e.message); }
@@ -5197,7 +5145,7 @@ function MenteeFinalForm({ onBack, onSubmit }) {
         </div>
       </div>
       <div style={{ background: "rgba(201,168,76,0.06)", border: "1px solid rgba(201,168,76,0.15)", borderRadius: 12, padding: "14px 18px", marginBottom: 24, fontSize: 13, color: "#8A9BB5", lineHeight: 1.7 }}>
-        As we approach the conclusion of Intersection 4.0, we would like to hear from you one more time about your mentorship journey. Your feedback is crucial for the development of Intersection 5.0.
+        As we approach the conclusion of Intersection 5.0, we would like to hear from you one more time about your mentorship journey. Your feedback is crucial for the development of Intersection 5.0.
       </div>
 
       <div className="card" style={{ padding: 32 }}>
@@ -5330,8 +5278,7 @@ function TrainerAssessments() {
 
 // ── Mentor First Meeting Form ─────────────────────────────────
 function MentorFirstMeetingForm({ onBack, onSubmit }) {
-  const { profile } = useAuth();
-  const { showSuccess, showError } = useToast();
+  const { profile, showSuccess, showError } = useAuth();
   const [saving, setSaving] = useState(false);
   const [f, setF] = useState({
     mentee_name: "", had_first_meeting: "yes",
@@ -5344,9 +5291,13 @@ function MentorFirstMeetingForm({ onBack, onSubmit }) {
 
   const handleSubmit = async () => {
     if (!f.mentee_name) { showError("Please fill required fields."); return; }
+    if (!profile?.id) { showError("Profile not loaded. Please refresh."); return; }
     setSaving(true);
     try {
-      await db.saveAssessment({ trainer_id: profile.id, form_type: "mentor_first_meeting", data: f });
+      await Promise.race([
+        db.saveAssessment({ trainer_id: profile.id, form_type: "mentor_first_meeting", data: f }),
+        new Promise((_, rej) => setTimeout(() => rej(new Error("Timed out")), 15000))
+      ]);
       showSuccess("Assessment submitted! Thank you.");
       onSubmit();
     } catch (e) { showError("Error: " + e.message); }
@@ -5363,7 +5314,7 @@ function MentorFirstMeetingForm({ onBack, onSubmit }) {
         </div>
       </div>
       <div style={{ background: "rgba(39,174,96,0.06)", border: "1px solid rgba(39,174,96,0.15)", borderRadius: 12, padding: "14px 18px", marginBottom: 24, fontSize: 13, color: "#8A9BB5", lineHeight: 1.7 }}>
-        Dear Mentor, thank you for participating in INTERSECTION 4.0. We hope your first encounter with your mentee went well. Your input is extremely valuable to evaluate the success of this mentorship journey.
+        Dear Mentor, thank you for participating in INTERSECTION 5.0. We hope your first encounter with your mentee went well. Your input is extremely valuable to evaluate the success of this mentorship journey.
       </div>
 
       <div className="card" style={{ padding: 32 }}>
@@ -5429,8 +5380,7 @@ function MentorFirstMeetingForm({ onBack, onSubmit }) {
 
 // ── Mentor Final Assessment Form ──────────────────────────────
 function MentorFinalForm({ onBack, onSubmit }) {
-  const { profile } = useAuth();
-  const { showSuccess, showError } = useToast();
+  const { profile, showSuccess, showError } = useAuth();
   const [saving, setSaving] = useState(false);
   const [f, setF] = useState({
     field_of_work: "", job_title_company: "",
@@ -5445,9 +5395,13 @@ function MentorFinalForm({ onBack, onSubmit }) {
 
   const handleSubmit = async () => {
     if (!f.testimonial || !f.mentor_next_edition) { showError("Please fill required fields."); return; }
+    if (!profile?.id) { showError("Profile not loaded. Please refresh."); return; }
     setSaving(true);
     try {
-      await db.saveAssessment({ trainer_id: profile.id, form_type: "mentor_final", data: f });
+      await Promise.race([
+        db.saveAssessment({ trainer_id: profile.id, form_type: "mentor_final", data: f }),
+        new Promise((_, rej) => setTimeout(() => rej(new Error("Timed out")), 15000))
+      ]);
       showSuccess("Final assessment submitted! Thank you for your incredible contribution.");
       onSubmit();
     } catch (e) { showError("Error: " + e.message); }
@@ -5464,7 +5418,7 @@ function MentorFinalForm({ onBack, onSubmit }) {
         </div>
       </div>
       <div style={{ background: "rgba(201,168,76,0.06)", border: "1px solid rgba(201,168,76,0.15)", borderRadius: 12, padding: "14px 18px", marginBottom: 24, fontSize: 13, color: "#8A9BB5", lineHeight: 1.7 }}>
-        As we approach the conclusion of Intersection 4.0, we would like to hear from you about your overall experience. You are a crucial player in the impact of this program and we extend our deepest thanks for your commitment and inspiring journey shared with your mentee.
+        As we approach the conclusion of Intersection 5.0, we would like to hear from you about your overall experience. You are a crucial player in the impact of this program and we extend our deepest thanks for your commitment and inspiring journey shared with your mentee.
       </div>
 
       <div className="card" style={{ padding: 32 }}>
@@ -5743,8 +5697,7 @@ function ParticipantAnnouncements() {
 
 // ── Compose & Manage Announcements (INJAZ Team + Trainer) ─────
 function ComposeAnnouncements({ senderRole = "injaz" }) {
-  const { profile, session } = useAuth();
-  const { showSuccess, showError } = useToast();
+  const { profile, session, showSuccess, showError } = useAuth();
   const [announcements, setAnnouncements] = useState([]);
   const [loading, setLoading] = useState(true);
   const [composing, setComposing] = useState(false);
@@ -5920,27 +5873,12 @@ function ComposeAnnouncements({ senderRole = "injaz" }) {
   );
 }
 
-// ── Notification Bell (unread count) for nav ─────────────────
-function useUnreadAnnouncements(session) {
-  const [count, setCount] = useState(0);
-  useEffect(() => {
-    if (!session?.user?.id) return;
-    (async () => {
-      const [anns, reads] = await Promise.all([
-        db.getAnnouncements(),
-        db.getReadAnnouncements(session.user.id),
-      ]);
-      setCount(anns.filter(a => !reads.includes(a.id)).length);
-    })();
-  }, [session?.user?.id]);
-  return count;
-}
+// ── (useUnreadAnnouncements defined above) ──────────────────
 
 
 // ── Invite Management (INJAZ Team only) ──────────────────────
 function InviteManagement() {
-  const { session } = useAuth();
-  const { showSuccess, showError } = useToast();
+  const { session, showSuccess, showError } = useAuth();
   const [invites, setInvites] = useState([]);
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState({ email: "", role: "seeker", full_name: "", note: "" });
@@ -6126,6 +6064,7 @@ export default function App() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [activePage, setActivePage] = useState("dashboard");
   const { toast, showSuccess, showError, showInfo } = useToast();
+  const unreadAnns = useUnreadAnnouncements(session);
 
   if (!supabase) return <SetupError />;
 
@@ -6237,8 +6176,7 @@ export default function App() {
       { id: "insights", icon: "◑", label: "Market Insights" },
       { id: "checkpoints", icon: "◉", label: "My Checkpoints" },
       { id: "attendance", icon: "≡", label: "My Attendance" },
-      { id: "announcements", icon: "◆", label: "Announcements" },
-      { id: "announcements", icon: "◆", label: "Announcements" },
+      { id: "announcements", icon: "◆", label: "Announcements", badge: unreadAnns },
       { id: "assessments", icon: "◈", label: "Assessments" },
       ...(isAdmin ? [{ id: "admin", icon: "✦", label: "Admin Panel" }, { id: "admin-journey", icon: "⊕", label: "Journey Overview" }] : []),
     ];
@@ -6260,7 +6198,7 @@ export default function App() {
     };
     return (
       <AuthCtx.Provider value={{ session, profile, setProfile, role, isAdmin, showSuccess, showError, showInfo }}>
-        <Shell navItems={navItems} userLabel={profile?.full_name || "Participant"} userSub={isAdmin ? "Admin Access" : `Profile ${profile?.profile_score || 20}% complete`} activePage={activePage} setActivePage={setActivePage}>
+        <Shell navItems={navItems} userLabel={profile?.full_name || "Participant"} userSub={isAdmin ? "Admin Access" : `Profile ${profile?.profile_score || 20}% complete`} activePage={activePage} setActivePage={setActivePage} session={session} role={role}>
           {pages[activePage] || pages.dashboard}
         </Shell>
         <Toast toast={toast} />
@@ -6321,7 +6259,7 @@ export default function App() {
     const typeLabel = trainerType === "mentor" ? "Mentor" : trainerType === "both" ? "Trainer & Mentor" : "Trainer";
     return (
       <AuthCtx.Provider value={{ session, profile, setProfile, role, isAdmin, showSuccess, showError, showInfo }}>
-        <Shell navItems={trainerNav} userLabel={profile?.full_name || typeLabel} userSub={`${typeLabel} · ${profile?.org_name || "INJAZ Lebanon"}`} activePage={activePage} setActivePage={setActivePage}>
+        <Shell navItems={trainerNav} userLabel={profile?.full_name || typeLabel} userSub={`${typeLabel} · ${profile?.org_name || "INJAZ Lebanon"}`} activePage={activePage} setActivePage={setActivePage} session={session} role={role}>
           {trainerPages[activePage] || trainerPages.dashboard}
         </Shell>
         <Toast toast={toast} />
