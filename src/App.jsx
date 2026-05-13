@@ -732,6 +732,10 @@ function AuthScreen({ onAuth }) {
   const [forgotMode, setForgotMode] = useState(false);
   const [resetSent, setResetSent] = useState(false);
 
+  const [mode, setMode] = useState("login"); // login | signup
+  const [fullName, setFullName] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+
   const handleLogin = async () => {
     if (!email.trim() || !password.trim()) { setError("Please enter your email and password."); return; }
     setLoading(true); setError("");
@@ -739,6 +743,27 @@ function AuthScreen({ onAuth }) {
       await db.signIn(email.trim(), password);
     } catch (e) {
       setError("Invalid email or password. Contact INJAZ team if you need access.");
+    } finally { setLoading(false); }
+  };
+
+  const handleSignUp = async () => {
+    if (!email.trim() || !password.trim() || !fullName.trim()) { setError("Please fill in all fields."); return; }
+    if (password !== confirmPassword) { setError("Passwords do not match."); return; }
+    if (password.length < 6) { setError("Password must be at least 6 characters."); return; }
+    setLoading(true); setError("");
+    try {
+      const allowed = await db.checkAllowedEmail(email.trim());
+      if (!allowed) { setError("This email is not on the invitation list. Contact INJAZ Lebanon to request access."); return; }
+      const { error } = await supabase.auth.signUp({
+        email: email.trim(), password,
+        options: { data: { full_name: fullName.trim(), role: allowed.role || "seeker" } }
+      });
+      if (error) throw error;
+      setError("");
+      alert("Account created! You can now sign in.");
+      setMode("login");
+    } catch (e) {
+      setError(e.message || "Could not create account.");
     } finally { setLoading(false); }
   };
 
@@ -797,10 +822,10 @@ function AuthScreen({ onAuth }) {
             <>
               <div style={{ marginBottom: 36 }}>
                 <h2 style={{ fontSize: 28, fontWeight: 700, color: "#F0EBE0", marginBottom: 6 }}>
-                  {forgotMode ? "Reset Password" : "Welcome back"}
+                  {forgotMode ? "Reset Password" : mode === "signup" ? "Create Account" : "Welcome back"}
                 </h2>
                 <p style={{ fontSize: 14, color: "#8A9BB5" }}>
-                  {forgotMode ? "Enter your email to receive a reset link" : "Sign in to your INJAZ account"}
+                  {forgotMode ? "Enter your email to receive a reset link" : mode === "signup" ? "Register with your invited email" : "Sign in to your INJAZ account"}
                 </p>
               </div>
 
@@ -811,38 +836,59 @@ function AuthScreen({ onAuth }) {
               )}
 
               <div style={{ display: "flex", flexDirection: "column", gap: 14, marginBottom: 20 }}>
+                {mode === "signup" && (
+                  <div>
+                    <label className="lbl">Full Name</label>
+                    <input className="input-field" type="text" placeholder="Your full name"
+                      value={fullName} onChange={e => setFullName(e.target.value)} />
+                  </div>
+                )}
                 <div>
                   <label className="lbl">Email Address</label>
                   <input className="input-field" type="email" placeholder="your@email.com"
                     value={email} onChange={e => setEmail(e.target.value)}
-                    onKeyDown={e => e.key === "Enter" && !forgotMode && handleLogin()} />
+                    onKeyDown={e => e.key === "Enter" && !forgotMode && mode === "login" && handleLogin()} />
                 </div>
                 {!forgotMode && (
                   <div>
                     <label className="lbl">Password</label>
                     <input className="input-field" type="password" placeholder="••••••••"
                       value={password} onChange={e => setPassword(e.target.value)}
-                      onKeyDown={e => e.key === "Enter" && handleLogin()} />
+                      onKeyDown={e => e.key === "Enter" && mode === "login" && handleLogin()} />
+                  </div>
+                )}
+                {mode === "signup" && (
+                  <div>
+                    <label className="lbl">Confirm Password</label>
+                    <input className="input-field" type="password" placeholder="••••••••"
+                      value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} />
                   </div>
                 )}
               </div>
 
               <button className="btn-primary" style={{ width: "100%", justifyContent: "center", padding: "13px", fontSize: 15, marginBottom: 12 }}
-                onClick={forgotMode ? handleForgot : handleLogin} disabled={loading}>
-                {loading ? <Spinner size={18} color="#080F1E" /> : forgotMode ? "Send Reset Link" : "Sign In ✦"}
+                onClick={forgotMode ? handleForgot : mode === "signup" ? handleSignUp : handleLogin} disabled={loading}>
+                {loading ? <Spinner size={18} color="#080F1E" /> : forgotMode ? "Send Reset Link" : mode === "signup" ? "Create Account ✦" : "Sign In ✦"}
               </button>
 
-              <button className="btn-ghost" style={{ width: "100%", justifyContent: "center", fontSize: 13 }}
-                onClick={() => { setForgotMode(!forgotMode); setError(""); }}>
-                {forgotMode ? "← Back to Sign In" : "Forgot password?"}
-              </button>
-
-              <div style={{ height: 1, background: "linear-gradient(90deg,transparent,rgba(201,168,76,0.2),transparent)", margin: "28px 0" }} />
-
-              <div style={{ textAlign: "center", padding: "14px 20px", background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 12 }}>
-                <div style={{ fontSize: 12, color: "#4A5A72", marginBottom: 6 }}>◆ Restricted Access</div>
-                <div style={{ fontSize: 13, color: "#8A9BB5" }}>This platform is invitation-only.<br />Contact INJAZ Lebanon to request access.</div>
-              </div>
+              {!forgotMode && mode === "login" && (
+                <button className="btn-ghost" style={{ width: "100%", justifyContent: "center", fontSize: 13 }}
+                  onClick={() => { setMode("signup"); setError(""); }}>
+                  New participant? Create account →
+                </button>
+              )}
+              {!forgotMode && mode === "signup" && (
+                <button className="btn-ghost" style={{ width: "100%", justifyContent: "center", fontSize: 13 }}
+                  onClick={() => { setMode("login"); setError(""); }}>
+                  ← Back to Sign In
+                </button>
+              )}
+              {!forgotMode && mode === "login" && (
+                <button className="btn-ghost" style={{ width: "100%", justifyContent: "center", fontSize: 13, marginTop: 8 }}
+                  onClick={() => { setForgotMode(true); setError(""); }}>
+                  Forgot password?
+                </button>
+              )}
             </>
           )}
         </div>
