@@ -5950,9 +5950,14 @@ export default function App() {
       setSession(sess);
       if (sess) await loadProfile(sess.user);
     });
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, sess) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, sess) => {
       setSession(sess);
-      if (sess) await loadProfile(sess.user);
+      // Only reload profile on actual sign in/out, not token refresh
+      if (event === "SIGNED_IN" || event === "INITIAL_SESSION") {
+        if (sess) await loadProfile(sess.user);
+      } else if (event === "SIGNED_OUT") {
+        setProfile(null); setRole(null); setIsAdmin(false);
+      }
       else { setProfile(null); setRole(null); setIsAdmin(false); }
     });
     return () => subscription.unsubscribe();
