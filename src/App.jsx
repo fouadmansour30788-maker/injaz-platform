@@ -410,7 +410,7 @@ const db = {
   },
   async getProgramCheckpoint() {
     try {
-      const { data } = await supabase.from("program_settings").select("*").eq("key", "intersection_checkpoint").single();
+      const { data } = await supabase.from("program_settings").select("*").eq("key", "intersection_checkpoint").maybeSingle();
       return data;
     } catch (e) { return null; }
   },
@@ -5958,7 +5958,7 @@ export default function App() {
       } else if (event === "SIGNED_OUT") {
         setProfile(null); setRole(null); setIsAdmin(false);
       }
-      else { setProfile(null); setRole(null); setIsAdmin(false); }
+      // TOKEN_REFRESHED and other events: do nothing, keep existing state
     });
     return () => subscription.unsubscribe();
   }, []);
