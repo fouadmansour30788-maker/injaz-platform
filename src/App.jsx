@@ -5990,8 +5990,6 @@ export default function App() {
       dashboard: <SeekerDashboard setActivePage={setActivePage} />,
       profile: <SeekerProfile />,
       matches: <JobMatches />,
-      coverletter: <CoverLetterAI />,
-      interview: <InterviewCoach />,
       journey: <JourneyTracker />,
       applications: <MyApplications />,
       insights: <MarketInsights />,
