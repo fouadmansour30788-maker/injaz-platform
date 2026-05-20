@@ -791,12 +791,22 @@ function SetupError() {
 
 // ── Auth screen ───────────────────────────────────────────────
 function AuthScreen({ onAuth }) {
+  const [mode, setMode] = useState("login"); // "login" | "signup" | "forgot"
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [forgotMode, setForgotMode] = useState(false);
   const [resetSent, setResetSent] = useState(false);
+  // Sign-up fields
+  const [fullName, setFullName] = useState("");
+  const [role, setRole] = useState("seeker");
+  const [orgName, setOrgName] = useState("");
+  const [governorate, setGovernorate] = useState("");
+  const [signupDone, setSignupDone] = useState(false);
+
+  const GOVS = ["Beirut","Mount Lebanon","North Lebanon","South Lebanon","Bekaa","Nabatieh","Akkar","Baalbek-Hermel"];
+
+  const switchMode = (m) => { setMode(m); setError(""); };
 
   const handleLogin = async () => {
     if (!email.trim() || !password.trim()) { setError("Please enter your email and password."); return; }
@@ -804,7 +814,7 @@ function AuthScreen({ onAuth }) {
     try {
       await db.signIn(email.trim(), password);
     } catch (e) {
-      setError("Invalid email or password. Contact INJAZ team if you need access.");
+      setError("Invalid email or password.");
     } finally { setLoading(false); }
   };
 
@@ -818,15 +828,29 @@ function AuthScreen({ onAuth }) {
     finally { setLoading(false); }
   };
 
+  const handleSignup = async () => {
+    if (!email.trim() || !password.trim() || !fullName.trim()) {
+      setError("Please fill in all required fields."); return;
+    }
+    if (password.length < 6) { setError("Password must be at least 6 characters."); return; }
+    setLoading(true); setError("");
+    try {
+      const meta = { role, full_name: fullName.trim(), governorate: governorate || null };
+      if (role === "employer") meta.org_name = orgName.trim() || fullName.trim();
+      await db.signUp(email.trim(), password, meta);
+      setSignupDone(true);
+    } catch (e) {
+      setError(e.message || "Could not create account. Try again.");
+    } finally { setLoading(false); }
+  };
+
   return (
     <div style={{ minHeight: "100vh", display: "flex", background: C.bg }}>
       {/* Left panel */}
       <div style={{ flex: "0 0 45%", background: "linear-gradient(160deg,#0A1628 0%,#050B14 100%)", display: "flex", flexDirection: "column", justifyContent: "space-between", padding: "56px 52px", position: "relative", overflow: "hidden" }}>
-        {/* Decorations */}
         <div style={{ position: "absolute", top: -60, right: -60, width: 240, height: 240, border: "1px solid rgba(201,168,76,0.15)", borderRadius: "50%", animation: "rotateSlow 25s linear infinite" }} />
         <div style={{ position: "absolute", top: -20, right: -20, width: 120, height: 120, border: "1px solid rgba(201,168,76,0.08)", borderRadius: "50%", animation: "rotateSlow 15s linear infinite reverse" }} />
         <div style={{ position: "absolute", bottom: 80, left: -40, width: 160, height: 160, border: "1px solid rgba(201,168,76,0.1)", transform: "rotate(45deg)", animation: "rotateSlow 30s linear infinite" }} />
-
         <div style={{ position: "relative", zIndex: 1 }}>
           <div style={{ marginBottom: 56 }}>
             <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 38, fontWeight: 300, color: "#F0EBE0", letterSpacing: 6, marginBottom: 4 }}>INJAZ</div>
@@ -843,47 +867,55 @@ function AuthScreen({ onAuth }) {
             ))}
           </div>
         </div>
-
         <div style={{ position: "relative", zIndex: 1, fontSize: 11, color: "#4A5A72" }}>
           © 2025 INJAZ Lebanon · Intersection Mentorship Platform
         </div>
       </div>
 
-      {/* Right panel - Login only */}
-      <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: 40 }}>
+      {/* Right panel */}
+      <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: 40, overflowY: "auto" }}>
         <div style={{ width: "100%", maxWidth: 400 }}>
+
+          {/* Password reset sent */}
           {resetSent ? (
             <div style={{ textAlign: "center" }}>
               <div style={{ fontSize: 48, color: "#C9A84C", marginBottom: 20 }}>◈</div>
               <h2 style={{ fontSize: 24, fontWeight: 700, color: "#F0EBE0", marginBottom: 12 }}>Check your email</h2>
               <p style={{ fontSize: 14, color: "#8A9BB5", marginBottom: 28 }}>We sent a password reset link to <strong style={{ color: "#F0EBE0" }}>{email}</strong></p>
-              <button className="btn-ghost" style={{ width: "100%", justifyContent: "center" }} onClick={() => { setResetSent(false); setForgotMode(false); }}>← Back to Sign In</button>
+              <button className="btn-ghost" style={{ width: "100%", justifyContent: "center" }} onClick={() => { setResetSent(false); switchMode("login"); }}>← Back to Sign In</button>
             </div>
-          ) : (
+
+          /* Sign-up confirmation */
+          ) : signupDone ? (
+            <div style={{ textAlign: "center" }}>
+              <div style={{ fontSize: 48, color: "#27AE60", marginBottom: 20 }}>✓</div>
+              <h2 style={{ fontSize: 24, fontWeight: 700, color: "#F0EBE0", marginBottom: 12 }}>Account created!</h2>
+              <p style={{ fontSize: 14, color: "#8A9BB5", marginBottom: 28 }}>Check your email to confirm your address, then sign in below.</p>
+              <button className="btn-primary" style={{ width: "100%", justifyContent: "center" }} onClick={() => { setSignupDone(false); switchMode("login"); }}>Go to Sign In</button>
+            </div>
+
+          /* Sign-in form */
+          ) : mode === "login" || mode === "forgot" ? (
             <>
               <div style={{ marginBottom: 36 }}>
                 <h2 style={{ fontSize: 28, fontWeight: 700, color: "#F0EBE0", marginBottom: 6 }}>
-                  {forgotMode ? "Reset Password" : "Welcome back"}
+                  {mode === "forgot" ? "Reset Password" : "Welcome back"}
                 </h2>
                 <p style={{ fontSize: 14, color: "#8A9BB5" }}>
-                  {forgotMode ? "Enter your email to receive a reset link" : "Sign in to your INJAZ account"}
+                  {mode === "forgot" ? "Enter your email to receive a reset link" : "Sign in to your INJAZ account"}
                 </p>
               </div>
 
-              {error && (
-                <div style={{ background: "rgba(200,57,43,0.12)", border: "1px solid rgba(200,57,43,0.3)", borderRadius: 10, padding: "12px 16px", fontSize: 13, color: "#FF8A80", marginBottom: 20 }}>
-                  {error}
-                </div>
-              )}
+              {error && <div style={{ background: "rgba(200,57,43,0.12)", border: "1px solid rgba(200,57,43,0.3)", borderRadius: 10, padding: "12px 16px", fontSize: 13, color: "#FF8A80", marginBottom: 20 }}>{error}</div>}
 
               <div style={{ display: "flex", flexDirection: "column", gap: 14, marginBottom: 20 }}>
                 <div>
                   <label className="lbl">Email Address</label>
                   <input className="input-field" type="email" placeholder="your@email.com"
                     value={email} onChange={e => setEmail(e.target.value)}
-                    onKeyDown={e => e.key === "Enter" && !forgotMode && handleLogin()} />
+                    onKeyDown={e => e.key === "Enter" && mode === "login" && handleLogin()} />
                 </div>
-                {!forgotMode && (
+                {mode === "login" && (
                   <div>
                     <label className="lbl">Password</label>
                     <input className="input-field" type="password" placeholder="••••••••"
@@ -894,20 +926,96 @@ function AuthScreen({ onAuth }) {
               </div>
 
               <button className="btn-primary" style={{ width: "100%", justifyContent: "center", padding: "13px", fontSize: 15, marginBottom: 12 }}
-                onClick={forgotMode ? handleForgot : handleLogin} disabled={loading}>
-                {loading ? <Spinner size={18} color="#080F1E" /> : forgotMode ? "Send Reset Link" : "Sign In ✦"}
+                onClick={mode === "forgot" ? handleForgot : handleLogin} disabled={loading}>
+                {loading ? <Spinner size={18} color="#080F1E" /> : mode === "forgot" ? "Send Reset Link" : "Sign In ✦"}
               </button>
 
               <button className="btn-ghost" style={{ width: "100%", justifyContent: "center", fontSize: 13 }}
-                onClick={() => { setForgotMode(!forgotMode); setError(""); }}>
-                {forgotMode ? "← Back to Sign In" : "Forgot password?"}
+                onClick={() => switchMode(mode === "forgot" ? "login" : "forgot")}>
+                {mode === "forgot" ? "← Back to Sign In" : "Forgot password?"}
               </button>
 
               <div style={{ height: 1, background: "linear-gradient(90deg,transparent,rgba(201,168,76,0.2),transparent)", margin: "28px 0" }} />
 
-              <div style={{ textAlign: "center", padding: "14px 20px", background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 12 }}>
-                <div style={{ fontSize: 12, color: "#4A5A72", marginBottom: 6 }}>◆ Restricted Access</div>
-                <div style={{ fontSize: 13, color: "#8A9BB5" }}>This platform is invitation-only.<br />Contact INJAZ Lebanon to request access.</div>
+              <div style={{ textAlign: "center", fontSize: 13, color: "#8A9BB5" }}>
+                Don't have an account?{" "}
+                <button style={{ background: "none", border: "none", color: "#C9A84C", cursor: "pointer", fontSize: 13, padding: 0, fontWeight: 600 }}
+                  onClick={() => switchMode("signup")}>Create one free</button>
+              </div>
+            </>
+
+          /* Sign-up form */
+          ) : (
+            <>
+              <div style={{ marginBottom: 28 }}>
+                <h2 style={{ fontSize: 28, fontWeight: 700, color: "#F0EBE0", marginBottom: 6 }}>Create account</h2>
+                <p style={{ fontSize: 14, color: "#8A9BB5" }}>Join INJAZ Lebanon's career platform</p>
+              </div>
+
+              {error && <div style={{ background: "rgba(200,57,43,0.12)", border: "1px solid rgba(200,57,43,0.3)", borderRadius: 10, padding: "12px 16px", fontSize: 13, color: "#FF8A80", marginBottom: 20 }}>{error}</div>}
+
+              <div style={{ display: "flex", flexDirection: "column", gap: 14, marginBottom: 20 }}>
+                {/* Role selector */}
+                <div>
+                  <label className="lbl">I am a</label>
+                  <div style={{ display: "flex", gap: 10 }}>
+                    {[["seeker", "Job Seeker"], ["employer", "Employer"]].map(([v, label]) => (
+                      <button key={v} onClick={() => setRole(v)}
+                        style={{ flex: 1, padding: "10px 8px", borderRadius: 10, border: `1px solid ${role === v ? "rgba(201,168,76,0.6)" : "rgba(255,255,255,0.08)"}`, background: role === v ? "rgba(201,168,76,0.1)" : "rgba(255,255,255,0.02)", color: role === v ? "#C9A84C" : "#8A9BB5", fontSize: 13, fontWeight: role === v ? 600 : 400, cursor: "pointer", transition: "all .15s" }}>
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="lbl">Full Name *</label>
+                  <input className="input-field" type="text" placeholder="Your full name"
+                    value={fullName} onChange={e => setFullName(e.target.value)} />
+                </div>
+
+                {role === "employer" && (
+                  <div>
+                    <label className="lbl">Organization Name *</label>
+                    <input className="input-field" type="text" placeholder="Your company or NGO"
+                      value={orgName} onChange={e => setOrgName(e.target.value)} />
+                  </div>
+                )}
+
+                <div>
+                  <label className="lbl">Email Address *</label>
+                  <input className="input-field" type="email" placeholder="your@email.com"
+                    value={email} onChange={e => setEmail(e.target.value)} />
+                </div>
+
+                <div>
+                  <label className="lbl">Password * (min 6 characters)</label>
+                  <input className="input-field" type="password" placeholder="••••••••"
+                    value={password} onChange={e => setPassword(e.target.value)}
+                    onKeyDown={e => e.key === "Enter" && handleSignup()} />
+                </div>
+
+                <div>
+                  <label className="lbl">Governorate (optional)</label>
+                  <select className="input-field" value={governorate} onChange={e => setGovernorate(e.target.value)}
+                    style={{ cursor: "pointer" }}>
+                    <option value="">Select governorate</option>
+                    {GOVS.map(g => <option key={g} value={g}>{g}</option>)}
+                  </select>
+                </div>
+              </div>
+
+              <button className="btn-primary" style={{ width: "100%", justifyContent: "center", padding: "13px", fontSize: 15, marginBottom: 12 }}
+                onClick={handleSignup} disabled={loading}>
+                {loading ? <Spinner size={18} color="#080F1E" /> : "Create Account ✦"}
+              </button>
+
+              <div style={{ height: 1, background: "linear-gradient(90deg,transparent,rgba(201,168,76,0.2),transparent)", margin: "20px 0" }} />
+
+              <div style={{ textAlign: "center", fontSize: 13, color: "#8A9BB5" }}>
+                Already have an account?{" "}
+                <button style={{ background: "none", border: "none", color: "#C9A84C", cursor: "pointer", fontSize: 13, padding: 0, fontWeight: 600 }}
+                  onClick={() => switchMode("login")}>Sign in</button>
               </div>
             </>
           )}
