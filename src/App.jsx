@@ -5047,14 +5047,16 @@ function MyAssessments() {
   const [assessments, setAssessments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeForm, setActiveForm] = useState(null);
+  const [viewingSubmission, setViewingSubmission] = useState(null);
 
   useEffect(() => {
-    if (!profile?.user_id) { setLoading(false); return; }
-    db.getMyAssessments(profile.user_id).then(setAssessments).catch(() => {}).finally(() => setLoading(false));
-  }, [profile?.user_id]);
+    if (!profile?.id) { setLoading(false); return; }
+    db.getMyAssessments(profile.id, "seeker").then(setAssessments).catch(() => {}).finally(() => setLoading(false));
+  }, [profile?.id]);
 
-  const has = (type) => assessments.some(a => a.type === type);
-  const reload = () => db.getMyAssessments(profile.user_id).then(setAssessments).catch(() => {});
+  const getSubmission = (type) => assessments.find(a => a.form_type === type);
+  const has = (type) => !!getSubmission(type);
+  const reload = () => db.getMyAssessments(profile.id, "seeker").then(setAssessments).catch(() => {});
 
   const formList = [
     { id: "mentee_first_meeting", title: "First Meeting Feedback", sub: "After your 1st 1-on-1 session", icon: "◆", color: "#27AE60", timing: "After 1st session" },
@@ -5069,6 +5071,10 @@ function MyAssessments() {
     if (id === "mentee_final") return <MenteeFinalForm onBack={() => setActiveForm(null)} onSubmit={done} existing={has(id)} />;
     return null;
   };
+
+  if (viewingSubmission) return (
+    <AssessmentSubmissionView submission={viewingSubmission} onBack={() => setViewingSubmission(null)} />
+  );
 
   if (activeForm) return (
     <div>
@@ -5087,7 +5093,8 @@ function MyAssessments() {
       {loading ? <div style={{ display: "flex", justifyContent: "center", padding: 60 }}><Spinner size={32} /></div>
         : <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           {formList.map(form => {
-            const done = has(form.id);
+            const submission = getSubmission(form.id);
+            const done = !!submission;
             return (
               <div key={form.id} className="card" style={{ padding: "22px 28px", display: "flex", alignItems: "center", gap: 20, border: done ? "1px solid rgba(39,174,96,0.2)" : `1px solid ${form.color}22`, cursor: done ? "default" : "pointer", transition: "all .2s" }}
                 onClick={() => !done && setActiveForm(form.id)}>
@@ -5100,12 +5107,179 @@ function MyAssessments() {
                   <div style={{ fontSize: 11, color: "#4A5A72" }}>Timing: {form.timing}</div>
                 </div>
                 {done
-                  ? <span style={{ fontSize: 12, background: "rgba(39,174,96,0.12)", color: "#4AE08A", border: "1px solid rgba(39,174,96,0.3)", borderRadius: 20, padding: "5px 14px", fontWeight: 600 }}>✓ Submitted</span>
+                  ? <div style={{ display: "flex", gap: 8, alignItems: "center", flexShrink: 0 }}>
+                      <span style={{ fontSize: 12, background: "rgba(39,174,96,0.12)", color: "#4AE08A", border: "1px solid rgba(39,174,96,0.3)", borderRadius: 20, padding: "5px 14px", fontWeight: 600 }}>✓ Submitted</span>
+                      <button className="btn-ghost" style={{ fontSize: 12, padding: "5px 14px" }} onClick={e => { e.stopPropagation(); setViewingSubmission(submission); }}>View →</button>
+                    </div>
                   : <button className="btn-primary" style={{ fontSize: 13, padding: "8px 18px" }} onClick={e => { e.stopPropagation(); setActiveForm(form.id); }}>Fill Form →</button>}
               </div>
             );
           })}
         </div>}
+    </div>
+  );
+}
+
+// ── Assessment Submission Viewer ──────────────────────────────
+function AssessmentSubmissionView({ submission, onBack }) {
+  const { data, form_type, created_at } = submission;
+  const formTitles = {
+    mentee_first_meeting: "First Meeting Feedback",
+    mentee_mid_program: "Mid-Program Assessment",
+    mentee_final: "Final Program Assessment",
+  };
+  const title = formTitles[form_type] || form_type;
+  const submittedDate = new Date(created_at).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+
+  const renderValue = (v) => {
+    if (v === null || v === undefined || v === "") return <span style={{ color: "#4A5A72", fontStyle: "italic" }}>—</span>;
+    if (typeof v === "number") {
+      if (v >= 1 && v <= 5) return <span style={{ color: "#C9A84C" }}>{"★".repeat(v)}<span style={{ color: "#2A3A52" }}>{"★".repeat(5 - v)}</span> <span style={{ color: "#8A9BB5", fontSize: 12 }}>({v}/5)</span></span>;
+      return <span>{v}</span>;
+    }
+    if (Array.isArray(v)) {
+      if (v.length === 0) return <span style={{ color: "#4A5A72", fontStyle: "italic" }}>—</span>;
+      return <span>{v.join(", ")}</span>;
+    }
+    if (typeof v === "object") {
+      const entries = Object.entries(v).filter(([, val]) => val !== null && val !== undefined && val !== "");
+      if (entries.length === 0) return <span style={{ color: "#4A5A72", fontStyle: "italic" }}>—</span>;
+      return <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+        {entries.map(([k, val]) => <span key={k} style={{ fontSize: 13 }}><span style={{ color: "#8A9BB5" }}>{k}:</span> {String(val)}</span>)}
+      </div>;
+    }
+    return <span>{String(v)}</span>;
+  };
+
+  const Field = ({ label, value }) => (
+    <div style={{ marginBottom: 16 }}>
+      <div style={{ fontSize: 11, color: "#8A9BB5", textTransform: "uppercase", letterSpacing: 1, marginBottom: 5 }}>{label}</div>
+      <div style={{ fontSize: 14, color: "#F0EBE0", lineHeight: 1.6 }}>{renderValue(value)}</div>
+    </div>
+  );
+
+  const Section = ({ title: sTitle, children }) => (
+    <div style={{ marginBottom: 28 }}>
+      <div style={{ fontSize: 11, color: "#C9A84C", fontWeight: 700, textTransform: "uppercase", letterSpacing: 2, marginBottom: 16, paddingBottom: 8, borderBottom: "1px solid rgba(201,168,76,0.15)" }}>{sTitle}</div>
+      {children}
+    </div>
+  );
+
+  const renderFields = () => {
+    if (form_type === "mentee_first_meeting") return <>
+      <Section title="Your Information">
+        <div className="grid-2" style={{ gap: "0 28px" }}>
+          <Field label="Edition" value={data.edition === "intersection_4" ? "Intersection 4.0 General" : data.edition === "intersection_tech" ? "Intersection TECH" : data.edition} />
+          <Field label="Mentor Name" value={data.mentor_name} />
+          <Field label="Phone" value={data.phone} />
+          <Field label="Field of Study" value={data.field_of_study} />
+          <Field label="University" value={data.university} />
+          <Field label="Current Employer" value={data.current_employer} />
+          <Field label="Job Title" value={data.job_title} />
+        </div>
+      </Section>
+      <Section title="First Meeting">
+        <div className="grid-2" style={{ gap: "0 28px" }}>
+          <Field label="Had First Meeting" value={data.had_first_meeting === "yes" ? "Yes" : data.had_first_meeting === "no" ? "No" : data.had_first_meeting} />
+          <Field label="Meeting Date" value={data.first_meeting_date} />
+        </div>
+        <Field label="Was your mentor encouraging?" value={data.mentor_encouraging} />
+        <Field label="Agreed on meeting frequency" value={data.agreed_on_frequency} />
+        <Field label="Meeting description" value={data.meeting_description} />
+      </Section>
+      <Section title="Goals & Expectations">
+        <Field label="Greatest strengths" value={data.greatest_strengths} />
+        <Field label="Major challenges" value={data.major_challenges} />
+        <Field label="Career goals" value={data.career_goals} />
+        <Field label="Areas of support needed" value={data.areas_of_support} />
+        <Field label="Expectations from the program" value={data.expectations} />
+      </Section>
+    </>;
+
+    if (form_type === "mentee_mid_program") return <>
+      <Section title="Updates">
+        <div className="grid-2" style={{ gap: "0 28px" }}>
+          <Field label="Field of Study (updated)" value={data.field_of_study_update} />
+          <Field label="University (updated)" value={data.university_update} />
+          <Field label="Current Employer (updated)" value={data.employer_update} />
+          <Field label="Current Job Title (updated)" value={data.job_title_update} />
+        </div>
+      </Section>
+      <Section title="1-on-1 Meetings">
+        <div className="grid-2" style={{ gap: "0 28px" }}>
+          <Field label="Average meeting duration" value={data.avg_meeting_duration} />
+          <Field label="Number of meetings" value={data.num_meetings} />
+        </div>
+      </Section>
+      <Section title="Mentorship Quality">
+        <div className="grid-2" style={{ gap: "0 28px" }}>
+          <Field label="Communication quality" value={data.communication_quality} />
+          <Field label="Progress towards goals" value={data.goal_progress} />
+          <Field label="Mentor supportiveness" value={data.mentor_support_rating} />
+          <Field label="Overall satisfaction" value={data.overall_satisfaction} />
+        </div>
+      </Section>
+      <Section title="Your Progress">
+        <Field label="Biggest achievement" value={data.biggest_achievement} />
+        <Field label="Challenges faced" value={data.challenges_faced} />
+      </Section>
+      <Section title="In-Person Gathering">
+        <div className="grid-2" style={{ gap: "0 28px" }}>
+          <Field label="Gathering satisfaction" value={data.gathering_satisfaction} />
+        </div>
+        <Field label="Enjoyed most" value={data.gathering_best} />
+        <Field label="Enjoyed least" value={data.gathering_least} />
+        <Field label="Anything else" value={data.anything_else} />
+      </Section>
+    </>;
+
+    if (form_type === "mentee_final") return <>
+      <Section title="About You">
+        <div className="grid-2" style={{ gap: "0 28px" }}>
+          <Field label="Graduate program" value={data.grad_program} />
+          <Field label="Field of Study" value={data.field_of_study} />
+          <Field label="University" value={data.university} />
+          <Field label="Job Position" value={data.job_position} />
+          <Field label="Company" value={data.company} />
+        </div>
+      </Section>
+      <Section title="Your Mentorship Journey">
+        <div className="grid-2" style={{ gap: "0 28px" }}>
+          <Field label="Total meetings" value={data.num_meetings} />
+          <Field label="Average duration" value={data.avg_duration} />
+          <Field label="Mentor match rating" value={data.mentor_match_rating} />
+          <Field label="Overall satisfaction" value={data.overall_satisfaction} />
+        </div>
+        <Field label="INJAZ communication & follow-up" value={data.communication_rating} />
+      </Section>
+      <Section title="Program Feedback">
+        <Field label="Satisfaction with 9-month duration" value={data.program_duration_satisfaction} />
+        <Field label="Most favorite component" value={data.favorite_component} />
+        <Field label="Least favorite component" value={data.least_favorite} />
+        <Field label="Suggestions for Intersection 5.0" value={data.suggestions} />
+      </Section>
+      <Section title="Final Words">
+        <Field label="Would recommend" value={data.would_recommend} />
+        <Field label="Testimonial" value={data.testimonial} />
+        <Field label="Additional comments" value={data.additional_comments} />
+      </Section>
+    </>;
+
+    return <pre style={{ color: "#8A9BB5", fontSize: 12, whiteSpace: "pre-wrap" }}>{JSON.stringify(data, null, 2)}</pre>;
+  };
+
+  return (
+    <div>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 28 }}>
+        <button className="btn-ghost" style={{ fontSize: 13 }} onClick={onBack}>← Back to Assessments</button>
+        <div>
+          <div style={{ fontSize: 11, color: "#C9A84C", letterSpacing: 2, textTransform: "uppercase", marginBottom: 4 }}>Submitted {submittedDate}</div>
+          <h1 style={{ fontSize: 22, fontWeight: 700, color: "#F0EBE0" }}>{title}</h1>
+        </div>
+      </div>
+      <div className="card" style={{ padding: 32 }}>
+        {renderFields()}
+      </div>
     </div>
   );
 }
