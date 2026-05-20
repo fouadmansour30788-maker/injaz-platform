@@ -6198,95 +6198,98 @@ export default function App() {
 
   if (!supabase) return <SetupError />;
 
-  const loadProfile = async (user) => {
-    const userRole = user.user_metadata?.role;
-    const email = user.email || "";
-    const adminStatus = ADMIN_EMAILS.includes(email.toLowerCase());
-    setRole(userRole);
-    setIsAdmin(adminStatus);
-
-    try {
-      if (userRole === "seeker") {
-        let p = null;
-        try { p = await db.getSeekerProfile(user.id); } catch (_) {}
-        if (!p) {
-          const meta = user.user_metadata || {};
-          await supabase.from("job_seekers").insert({
-            user_id: user.id, full_name: meta.full_name || "",
-            governorate: meta.governorate || null, sector: meta.sector || null,
-            nationality: "Lebanese", profile_score: 20,
-          }).single();
-          p = await db.getSeekerProfile(user.id).catch(() => null);
-        }
-        setProfile(p);
-      } else if (userRole === "employer") {
-        let p = null;
-        try { p = await db.getEmployerProfile(user.id); } catch (_) {}
-        if (!p) {
-          const meta = user.user_metadata || {};
-          await supabase.from("employers").insert({
-            user_id: user.id, org_name: meta.org_name || meta.full_name || "My Organization",
-            contact_person: meta.full_name || "", governorate: meta.governorate || null, sector: meta.sector || null,
-          }).single();
-          p = await db.getEmployerProfile(user.id).catch(() => null);
-        }
-        setProfile(p);
-      } else if (userRole === "trainer") {
-        let p = null;
-        try { p = await db.getTrainerProfile(user.id); } catch (_) {}
-        if (!p) {
-          const meta = user.user_metadata || {};
-          await supabase.from("trainers").insert({
-            user_id: user.id,
-            full_name: meta.full_name || "",
-            trainer_type: meta.trainer_type || "trainer",
-            org_name: meta.org_name || "",
-            governorate: meta.governorate || null,
-            sector: meta.sector || null,
-            profile_score: 20,
-          }).single();
-          p = await db.getTrainerProfile(user.id).catch(() => null);
-        }
-        setProfile(p);
-      } else if (userRole === "injaz_team") {
-        let p = null;
-        try { p = await db.getInjazTeamProfile(user.id); } catch (_) {}
-        if (!p) {
-          const meta = user.user_metadata || {};
-          await supabase.from("injaz_team").insert({
-            user_id: user.id,
-            full_name: meta.full_name || "",
-            injaz_role: meta.injaz_role || "program_officer",
-            governorate: meta.governorate || null,
-            profile_score: 20,
-          }).single();
-          p = await db.getInjazTeamProfile(user.id).catch(() => null);
-        }
-        setProfile(p);
-      }
-    } catch (e) { console.error("loadProfile error:", e); }
+  // Apply auth metadata from the JWT synchronously — no DB calls.
+  // Safe to call from inside onAuthStateChange (which runs while Supabase holds
+  // its internal auth lock). DB calls inside that lock cause a pendingInLock
+  // deadlock where getSession() waits for the lock holder, which is waiting for
+  // getSession() — freezing the app permanently on every tab-focus event.
+  const applyAuthState = (sess) => {
+    setSession(sess);
+    if (sess?.user) {
+      setRole(sess.user.user_metadata?.role ?? null);
+      setIsAdmin(ADMIN_EMAILS.includes((sess.user.email || '').toLowerCase()));
+    } else {
+      setRole(null);
+      setIsAdmin(false);
+      setProfile(null);
+    }
   };
 
+  // Auth subscription — callbacks are synchronous (no await, no DB calls).
   useEffect(() => {
-    // Bootstrap initial session; INITIAL_SESSION event from onAuthStateChange is skipped below
-    // to avoid calling loadProfile twice concurrently on mount.
-    db.getSession().then(async (sess) => {
-      setSession(sess);
-      if (sess) await loadProfile(sess.user);
-    });
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, sess) => {
-      // INITIAL_SESSION is already handled by getSession() above – skip to avoid double-load.
-      if (event === 'INITIAL_SESSION') return;
-      // TOKEN_REFRESHED only rotates the JWT; the user and profile are unchanged.
-      // Making DB calls here would compete with the auth lock held during refresh,
-      // causing the app to stall. Just update the session token and return.
-      if (event === 'TOKEN_REFRESHED') { setSession(sess); return; }
-      setSession(sess);
-      if (sess) await loadProfile(sess.user);
-      else { setProfile(null); setRole(null); setIsAdmin(false); }
+    db.getSession().then(applyAuthState);
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, sess) => {
+      if (event === 'INITIAL_SESSION') return; // handled by getSession() above
+      if (event === 'TOKEN_REFRESHED') { setSession(sess); return; } // token rotated, user unchanged
+      applyAuthState(sess);
     });
     return () => subscription.unsubscribe();
   }, []);
+
+  // Load full profile from DB whenever the authenticated user changes.
+  // Runs in a separate effect so it executes outside the Supabase auth lock,
+  // avoiding the deadlock described above.
+  useEffect(() => {
+    if (!session?.user) return;
+    const user = session.user;
+    const userRole = user.user_metadata?.role;
+    (async () => {
+      try {
+        if (userRole === "seeker") {
+          let p = null;
+          try { p = await db.getSeekerProfile(user.id); } catch (_) {}
+          if (!p) {
+            const meta = user.user_metadata || {};
+            await supabase.from("job_seekers").insert({
+              user_id: user.id, full_name: meta.full_name || "",
+              governorate: meta.governorate || null, sector: meta.sector || null,
+              nationality: "Lebanese", profile_score: 20,
+            }).single();
+            p = await db.getSeekerProfile(user.id).catch(() => null);
+          }
+          setProfile(p);
+        } else if (userRole === "employer") {
+          let p = null;
+          try { p = await db.getEmployerProfile(user.id); } catch (_) {}
+          if (!p) {
+            const meta = user.user_metadata || {};
+            await supabase.from("employers").insert({
+              user_id: user.id, org_name: meta.org_name || meta.full_name || "My Organization",
+              contact_person: meta.full_name || "", governorate: meta.governorate || null, sector: meta.sector || null,
+            }).single();
+            p = await db.getEmployerProfile(user.id).catch(() => null);
+          }
+          setProfile(p);
+        } else if (userRole === "trainer") {
+          let p = null;
+          try { p = await db.getTrainerProfile(user.id); } catch (_) {}
+          if (!p) {
+            const meta = user.user_metadata || {};
+            await supabase.from("trainers").insert({
+              user_id: user.id, full_name: meta.full_name || "",
+              trainer_type: meta.trainer_type || "trainer", org_name: meta.org_name || "",
+              governorate: meta.governorate || null, sector: meta.sector || null, profile_score: 20,
+            }).single();
+            p = await db.getTrainerProfile(user.id).catch(() => null);
+          }
+          setProfile(p);
+        } else if (userRole === "injaz_team") {
+          let p = null;
+          try { p = await db.getInjazTeamProfile(user.id); } catch (_) {}
+          if (!p) {
+            const meta = user.user_metadata || {};
+            await supabase.from("injaz_team").insert({
+              user_id: user.id, full_name: meta.full_name || "",
+              injaz_role: meta.injaz_role || "program_officer",
+              governorate: meta.governorate || null, profile_score: 20,
+            }).single();
+            p = await db.getInjazTeamProfile(user.id).catch(() => null);
+          }
+          setProfile(p);
+        }
+      } catch (e) { console.error("loadProfile error:", e); }
+    })();
+  }, [session?.user?.id]);
 
   // Loading
   if (session === undefined) return (
