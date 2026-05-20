@@ -6268,11 +6268,19 @@ export default function App() {
   };
 
   useEffect(() => {
+    // Bootstrap initial session; INITIAL_SESSION event from onAuthStateChange is skipped below
+    // to avoid calling loadProfile twice concurrently on mount.
     db.getSession().then(async (sess) => {
       setSession(sess);
       if (sess) await loadProfile(sess.user);
     });
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, sess) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, sess) => {
+      // INITIAL_SESSION is already handled by getSession() above – skip to avoid double-load.
+      if (event === 'INITIAL_SESSION') return;
+      // TOKEN_REFRESHED only rotates the JWT; the user and profile are unchanged.
+      // Making DB calls here would compete with the auth lock held during refresh,
+      // causing the app to stall. Just update the session token and return.
+      if (event === 'TOKEN_REFRESHED') { setSession(sess); return; }
       setSession(sess);
       if (sess) await loadProfile(sess.user);
       else { setProfile(null); setRole(null); setIsAdmin(false); }
