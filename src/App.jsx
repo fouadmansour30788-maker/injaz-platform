@@ -5169,7 +5169,7 @@ function AssessmentSubmissionView({ submission, onBack }) {
     if (form_type === "mentee_first_meeting") return <>
       <Section title="Your Information">
         <div className="grid-2" style={{ gap: "0 28px" }}>
-          <Field label="Edition" value={data.edition === "intersection_4" ? "Intersection 4.0 General" : data.edition === "intersection_tech" ? "Intersection TECH" : data.edition} />
+          <Field label="Edition" value={data.edition === "intersection_4" ? "Intersection 5.0" : data.edition === "intersection_tech" ? "Intersection TECH" : data.edition} />
           <Field label="Mentor Name" value={data.mentor_name} />
           <Field label="Phone" value={data.phone} />
           <Field label="Field of Study" value={data.field_of_study} />
@@ -5327,7 +5327,7 @@ function MenteeFirstMeetingForm({ onBack, onSubmit }) {
         <FormSection icon="◆" title="Your Information">
           <div className="grid-2" style={{ gap: 14 }}>
             <FormField label="Edition" required>
-              <RadioGroup options={[{ value: "intersection_4", label: "Intersection 4.0 General" }, { value: "intersection_tech", label: "Intersection TECH" }]} value={f.edition} onChange={v => set("edition", v)} />
+              <RadioGroup options={[{ value: "intersection_4", label: "Intersection 5.0" }, { value: "intersection_tech", label: "Intersection TECH" }]} value={f.edition} onChange={v => set("edition", v)} />
             </FormField>
             <FormField label="Name of Mentor" required>
               <input className="input-field" value={f.mentor_name} onChange={e => set("mentor_name", e.target.value)} placeholder="Your mentor's name" />
@@ -6599,7 +6599,6 @@ export default function App() {
       { id: "insights", icon: "◑", label: "Market Insights" },
       { id: "checkpoints", icon: "◉", label: "My Checkpoints" },
       { id: "attendance", icon: "≡", label: "My Attendance" },
-      { id: "announcements", icon: "◆", label: "Announcements" },
       { id: "announcements", icon: "◆", label: "Announcements" },
       { id: "assessments", icon: "◈", label: "Assessments" },
       ...(isAdmin ? [{ id: "admin", icon: "✦", label: "Admin Panel" }, { id: "admin-journey", icon: "⊕", label: "Journey Overview" }] : []),
