@@ -485,82 +485,6 @@ const db = {
     const { error } = await supabase.from("assessments").insert(assessment);
     if (error) throw error;
   },
-  async getMyAssessments(userId) {
-    const { data } = await supabase.from("assessments").select("*").eq("user_id", userId);
-    return data || [];
-  },
-  async getAllAssessments() {
-    const { data } = await supabase.from("assessments")
-      .select("*, job_seekers(full_name), trainers(full_name)")
-      .order("created_at", { ascending: false });
-    return data || [];
-  },
-  async checkAllowedEmail(email) {
-    const { data } = await supabase.from("allowed_emails")
-      .select("*").eq("email", email.toLowerCase().trim()).single();
-    return data;
-  },
-  async getAllowedEmails() {
-    const { data } = await supabase.from("allowed_emails").select("*").order("created_at", { ascending: false });
-    return data || [];
-  },
-  async addAllowedEmail(email, role, name) {
-    const { error } = await supabase.from("allowed_emails")
-      .insert({ email: email.toLowerCase().trim(), role, full_name: name });
-    if (error) throw error;
-  },
-  async removeAllowedEmail(id) {
-    const { error } = await supabase.from("allowed_emails").delete().eq("id", id);
-    if (error) throw error;
-  },
-  async checkInvite(email) {
-    const { data } = await supabase.from("invites")
-      .select("*").eq("email", email.toLowerCase().trim()).eq("used", false).single();
-    return data;
-  },
-  async markInviteUsed(email) {
-    await supabase.from("invites").update({ used: true, used_at: new Date().toISOString() })
-      .eq("email", email.toLowerCase().trim());
-  },
-  async createInvite(invite) {
-    const { data, error } = await supabase.from("invites").insert(invite).select().single();
-    if (error) throw error;
-    return data;
-  },
-  async getInvites() {
-    const { data } = await supabase.from("invites").select("*").order("created_at", { ascending: false });
-    return data || [];
-  },
-  async deleteInvite(id) {
-    const { error } = await supabase.from("invites").delete().eq("id", id);
-    if (error) throw error;
-  },
-  async getAnnouncements() {
-    const { data } = await supabase.from("announcements")
-      .select("*").order("created_at", { ascending: false });
-    return data || [];
-  },
-  async createAnnouncement(ann) {
-    const { data, error } = await supabase.from("announcements").insert(ann).select().single();
-    if (error) throw error;
-    return data;
-  },
-  async deleteAnnouncement(id) {
-    const { error } = await supabase.from("announcements").delete().eq("id", id);
-    if (error) throw error;
-  },
-  async markAnnouncementRead(annId, userId) {
-    await supabase.from("announcement_reads").upsert({ announcement_id: annId, user_id: userId }, { onConflict: "announcement_id,user_id" });
-  },
-  async getReadAnnouncements(userId) {
-    const { data } = await supabase.from("announcement_reads").select("announcement_id").eq("user_id", userId);
-    return (data || []).map(r => r.announcement_id);
-  },
-  async saveAssessment(assessment) {
-    const { data, error } = await supabase.from("assessments").insert(assessment).select().single();
-    if (error) throw error;
-    return data;
-  },
   async getMyAssessments(userId, role) {
     const col = role === "trainer" ? "trainer_id" : "seeker_id";
     const { data } = await supabase.from("assessments").select("*").eq(col, userId).order("created_at", { ascending: false });
@@ -636,10 +560,6 @@ const db = {
     const { data, error } = await supabase.from("assessments").insert(assessment).select().single();
     if (error) throw error;
     return data;
-  },
-  async getMyAssessments(userId) {
-    const { data } = await supabase.from("assessments").select("*").eq("user_id", userId);
-    return data || [];
   },
   async getAllAssessments() {
     const { data } = await supabase.from("assessments")
