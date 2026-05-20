@@ -1104,6 +1104,7 @@ function SeekerDashboard({ setActivePage }) {
   const [stats, setStats] = useState(null);
   const [matches, setMatches] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [assessments, setAssessments] = useState([]);
 
   useEffect(() => {
     const t = setTimeout(() => setLoading(false), 5000);
@@ -1116,6 +1117,7 @@ function SeekerDashboard({ setActivePage }) {
           const ranked = postings.map(p => ({ ...p, matchResult: ai.computeMatchScore({ ...profile, skills }, p) }))
             .sort((a, b) => b.matchResult.total - a.matchResult.total).slice(0, 3);
           setMatches(ranked);
+          db.getMyAssessments(profile.id, "seeker").then(setAssessments).catch(() => {});
         }
       } catch (e) { console.error(e); }
       finally { clearTimeout(t); setLoading(false); }
@@ -1191,6 +1193,32 @@ function SeekerDashboard({ setActivePage }) {
               </button>
             ))}
           </div>
+        </div>
+      </div>
+
+      {/* Assessments */}
+      <div className="card fade-up" style={{ marginTop: 20 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+          <h3 style={{ fontSize: 15, fontWeight: 700, color: "#F0EBE0" }}>◈ My Assessments</h3>
+          <button className="btn-ghost" style={{ fontSize: 13 }} onClick={() => setActivePage("assessments")}>Go to Assessments →</button>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column" }}>
+          {[
+            { id: "mentee_first_meeting", title: "First Meeting Feedback", color: "#27AE60" },
+            { id: "mentee_mid_program", title: "Mid-Program Assessment", color: "#C9A84C" },
+            { id: "mentee_final", title: "Final Program Assessment", color: "#8E44AD" },
+          ].map((form, i, arr) => {
+            const submitted = assessments.find(a => a.form_type === form.id);
+            return (
+              <div key={form.id} style={{ display: "flex", alignItems: "center", gap: 14, padding: "12px 0", borderBottom: i < arr.length - 1 ? "1px solid rgba(255,255,255,0.06)" : "none" }}>
+                <div style={{ width: 10, height: 10, borderRadius: "50%", background: submitted ? "#4AE08A" : "#2A3A52", border: submitted ? "none" : "1px solid #3A4A62", flexShrink: 0 }} />
+                <div style={{ flex: 1, fontSize: 14, color: submitted ? "#F0EBE0" : "#8A9BB5" }}>{form.title}</div>
+                <button className={submitted ? "btn-ghost" : "btn-primary"} style={{ fontSize: 12, padding: "5px 14px" }} onClick={() => setActivePage("assessments")}>
+                  {submitted ? "View →" : "Fill →"}
+                </button>
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>
