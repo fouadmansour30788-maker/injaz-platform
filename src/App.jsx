@@ -1020,82 +1020,167 @@ function GoldDivider() {
 
 
 function SeekerDashboard({ setActivePage }) {
-  const { profile } = useAuth();
-  const [stats, setStats] = useState(null);
-  const [matches, setMatches] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const { profile, session } = useAuth();
+  const [attendanceCount, setAttendanceCount] = useState(0);
   const [assessments, setAssessments] = useState([]);
+  const [checkpoint, setCheckpoint] = useState(null);
+  const [announcements, setAnnouncements] = useState([]);
+  const [readIds, setReadIds] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const t = setTimeout(() => setLoading(false), 5000);
+    if (!profile?.id) return;
     (async () => {
       try {
-        const [s, postings] = await Promise.all([db.getPlatformStats(), db.getActivePostings()]);
-        setStats(s);
-        if (profile) {
-          const skills = await db.getSeekerSkills(profile.id).catch(() => []);
-          const ranked = postings.map(p => ({ ...p, matchResult: ai.computeMatchScore({ ...profile, skills }, p) }))
-            .sort((a, b) => b.matchResult.total - a.matchResult.total).slice(0, 3);
-          setMatches(ranked);
-          db.getMyAssessments(profile.id, "seeker").then(setAssessments).catch(() => {});
-        }
+        const [attendance, assess, cp, anns, reads] = await Promise.all([
+          db.getMyAttendance(profile.id).catch(() => []),
+          db.getMyAssessments(profile.id, "seeker").catch(() => []),
+          db.getProgramCheckpoint().catch(() => null),
+          db.getAnnouncements().catch(() => []),
+          session?.user?.id ? db.getReadAnnouncements(session.user.id).catch(() => []) : [],
+        ]);
+        setAttendanceCount(attendance.length);
+        setAssessments(assess);
+        setCheckpoint(cp);
+        setAnnouncements(anns.slice(0, 3));
+        setReadIds(reads);
       } catch (e) { console.error(e); }
-      finally { clearTimeout(t); setLoading(false); }
+      finally { setLoading(false); }
     })();
-  }, [profile?.id]);
+  }, [profile?.id, session?.user?.id]);
 
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
   const name = profile?.full_name?.split(" ")[0] || "there";
   const score = profile?.profile_score || 20;
+  const unread = announcements.filter(a => !readIds.includes(a.id)).length;
+
+  const currentCpId = checkpoint?.value || "foundation";
+  const currentCpIdx = INTERSECTION_CHECKPOINTS.findIndex(c => c.id === currentCpId);
+  const currentCp = INTERSECTION_CHECKPOINTS[Math.max(0, currentCpIdx)];
+  const cpPct = Math.round((Math.max(0, currentCpIdx) / (INTERSECTION_CHECKPOINTS.length - 1)) * 100);
+
+  const annTypeConfig = {
+    general: { color: "#C9A84C", icon: "◆" },
+    urgent: { color: "#C8392B", icon: "◉" },
+    reminder: { color: "#2980B9", icon: "◈" },
+    milestone: { color: "#27AE60", icon: "★" },
+    event: { color: "#8E44AD", icon: "◐" },
+  };
 
   return (
     <div>
+      {/* Header */}
       <div className="fade-up" style={{ marginBottom: 28 }}>
-        <h1 style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 26, fontWeight: 700, color: "#F0EBE0", marginBottom: 4 }}>{greeting}, {name} </h1>
-        <p style={{ color: "#8A9BB5", fontSize: 14 }}>Your career dashboard — updated in real time</p>
+        <div style={{ fontSize: 11, color: "#C9A84C", letterSpacing: 2, textTransform: "uppercase", marginBottom: 8 }}>◆ Intersection Mentorship Program</div>
+        <h1 style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 26, fontWeight: 700, color: "#F0EBE0", marginBottom: 4 }}>{greeting}, {name}</h1>
+        <p style={{ color: "#8A9BB5", fontSize: 14 }}>Your INJAZ program dashboard — updated in real time</p>
       </div>
 
       {/* Stats */}
       <div className="grid-4" style={{ marginBottom: 28 }}>
-        <StatCard label="Platform Participants" value={stats ? stats.seekers.toLocaleString() : "—"} icon="◈" color={C.accent} delay={0} />
-        <StatCard label="Active Postings" value={stats ? stats.postings.toLocaleString() : "—"} icon="◆" color={C.green} delay={.05} />
-        <StatCard label="Profile Score" value={`${score}%`} icon="✦" color={C.amber} delay={.1} />
-        <StatCard label="Applications" value={stats ? stats.applications.toLocaleString() : "—"} icon="◉" color={C.purple} delay={.15} />
+        <StatCard label="Profile Score" value={`${score}%`} icon="✦" color={C.amber} delay={0} />
+        <StatCard label="Sessions Logged" value={loading ? "—" : attendanceCount} icon="◉" color={C.green} delay={.05} />
+        <StatCard label="Assessments Done" value={loading ? "—" : `${assessments.length} / 3`} icon="◈" color={C.purple} delay={.1} />
+        <StatCard label="Program Progress" value={loading ? "—" : `${cpPct}%`} icon="◐" color={C.primary} delay={.15} />
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 320px", gap: 20, alignItems: "start" }}>
-        {/* Matches */}
-        <div className="card fade-up-2">
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-            <h3 style={{ fontSize: 16, fontWeight: 700, color: "#F0EBE0" }}>Top Job Matches</h3>
-            <button className="btn-ghost" style={{ fontSize: 13 }} onClick={() => setActivePage("matches")}>View all →</button>
-          </div>
-          {loading ? <div style={{ display: "flex", justifyContent: "center", padding: 40 }}><Spinner /></div>
-            : matches.length === 0 ? (
-              <div style={{ textAlign: "center", padding: 40, color: "#4A5A72" }}>
-                <div style={{ fontSize: 40, marginBottom: 12 }}>◈</div>
-                <div style={{ fontSize: 14, marginBottom: 16 }}>Complete your profile to see matches</div>
-                <button className="btn-primary" onClick={() => setActivePage("profile")}>Complete Profile →</button>
-              </div>
-            ) : matches.map(job => (
-              <div key={job.id} style={{ display: "flex", alignItems: "center", gap: 16, padding: "14px 0", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
-                <ScoreRing score={job.matchResult.total} size={52} />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 600, fontSize: 14, color: "#F0EBE0", marginBottom: 2 }}>{job.title}</div>
-                  <div style={{ fontSize: 12, color: "#8A9BB5" }}>{job.employers?.org_name} · {job.governorate}</div>
+        {/* Left column */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+
+          {/* Current program stage */}
+          <div className="card fade-up-2" style={{ border: `1px solid ${currentCp.color}44`, position: "relative", overflow: "hidden" }}>
+            <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: `linear-gradient(90deg,${currentCp.color},${currentCp.color}88)` }} />
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+              <h3 style={{ fontSize: 15, fontWeight: 700, color: "#F0EBE0" }}>Current Program Stage</h3>
+              <button className="btn-ghost" style={{ fontSize: 13 }} onClick={() => setActivePage("checkpoints")}>Full lifecycle →</button>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+              <div style={{ width: 52, height: 52, borderRadius: "50%", background: currentCp.colorLight, border: `2px solid ${currentCp.color}66`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, color: currentCp.color, flexShrink: 0 }}>{currentCp.icon}</div>
+              <div style={{ flex: 1 }}>
+                <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 6 }}>
+                  <span style={{ fontSize: 11, background: currentCp.colorLight, color: currentCp.color, border: `1px solid ${currentCp.color}44`, borderRadius: 20, padding: "2px 10px", fontWeight: 700 }}>{currentCp.period}</span>
+                  <span style={{ fontSize: 11, background: "rgba(201,168,76,0.12)", color: "#C9A84C", border: "1px solid rgba(201,168,76,0.3)", borderRadius: 20, padding: "2px 10px", fontWeight: 700 }}>ACTIVE</span>
                 </div>
-                <span className={`badge ${job.matchResult.total >= 70 ? "badge-green" : job.matchResult.total >= 50 ? "badge-amber" : "badge-red"}`}>
-                  {job.matchResult.total >= 70 ? "Strong" : job.matchResult.total >= 50 ? "Good" : "Partial"}
-                </span>
+                <div style={{ fontSize: 17, fontWeight: 700, color: "#F0EBE0", marginBottom: 8 }}>{currentCp.label}</div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                  {currentCp.tasks.map(task => (
+                    <span key={task} style={{ padding: "4px 12px", background: currentCp.colorLight, border: `1px solid ${currentCp.color}33`, borderRadius: 20, fontSize: 12, color: currentCp.color }}>→ {task}</span>
+                  ))}
+                </div>
               </div>
-            ))}
+            </div>
+            <div style={{ marginTop: 20 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                <span style={{ fontSize: 12, color: "#8A9BB5" }}>Overall program progress</span>
+                <span style={{ fontSize: 12, color: "#C9A84C", fontWeight: 700 }}>{cpPct}%</span>
+              </div>
+              <ProgressBar value={cpPct} color={currentCp.color} height={6} />
+            </div>
+          </div>
+
+          {/* Recent Announcements */}
+          <div className="card fade-up-3">
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+              <h3 style={{ fontSize: 15, fontWeight: 700, color: "#F0EBE0" }}>
+                ◆ Announcements
+                {unread > 0 && <span style={{ marginLeft: 8, background: "rgba(200,57,43,0.2)", color: "#FF8A80", border: "1px solid rgba(200,57,43,0.3)", borderRadius: 20, padding: "1px 8px", fontSize: 11, fontWeight: 700 }}>{unread} new</span>}
+              </h3>
+              <button className="btn-ghost" style={{ fontSize: 13 }} onClick={() => setActivePage("announcements")}>View all →</button>
+            </div>
+            {loading ? <div style={{ display: "flex", justifyContent: "center", padding: 24 }}><Spinner /></div>
+              : announcements.length === 0
+                ? <div style={{ textAlign: "center", padding: 24, color: "#4A5A72", fontSize: 14 }}>No announcements yet — check back soon</div>
+                : announcements.map((ann, i) => {
+                  const tc = annTypeConfig[ann.type] || annTypeConfig.general;
+                  const isUnread = !readIds.includes(ann.id);
+                  return (
+                    <div key={ann.id} style={{ display: "flex", gap: 12, padding: "12px 0", borderBottom: i < announcements.length - 1 ? "1px solid rgba(255,255,255,0.06)" : "none", alignItems: "flex-start" }}>
+                      <span style={{ fontSize: 16, color: tc.color, flexShrink: 0 }}>{tc.icon}</span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2 }}>
+                          <div style={{ fontWeight: 600, fontSize: 14, color: "#F0EBE0", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{ann.title}</div>
+                          {isUnread && <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#C8392B", flexShrink: 0 }} />}
+                        </div>
+                        <div style={{ fontSize: 12, color: "#8A9BB5" }}>{new Date(ann.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</div>
+                      </div>
+                    </div>
+                  );
+                })}
+          </div>
+
+          {/* Assessments */}
+          <div className="card fade-up-4">
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+              <h3 style={{ fontSize: 15, fontWeight: 700, color: "#F0EBE0" }}>◈ My Assessments</h3>
+              <button className="btn-ghost" style={{ fontSize: 13 }} onClick={() => setActivePage("assessments")}>Go to Assessments →</button>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column" }}>
+              {[
+                { id: "mentee_first_meeting", title: "First Meeting Feedback", color: "#27AE60" },
+                { id: "mentee_mid_program", title: "Mid-Program Assessment", color: "#C9A84C" },
+                { id: "mentee_final", title: "Final Program Assessment", color: "#8E44AD" },
+              ].map((form, i, arr) => {
+                const submitted = assessments.find(a => a.form_type === form.id);
+                return (
+                  <div key={form.id} style={{ display: "flex", alignItems: "center", gap: 14, padding: "12px 0", borderBottom: i < arr.length - 1 ? "1px solid rgba(255,255,255,0.06)" : "none" }}>
+                    <div style={{ width: 10, height: 10, borderRadius: "50%", background: submitted ? "#4AE08A" : "#2A3A52", border: submitted ? "none" : "1px solid #3A4A62", flexShrink: 0 }} />
+                    <div style={{ flex: 1, fontSize: 14, color: submitted ? "#F0EBE0" : "#8A9BB5" }}>{form.title}</div>
+                    <button className={submitted ? "btn-ghost" : "btn-primary"} style={{ fontSize: 12, padding: "5px 14px" }} onClick={() => setActivePage("assessments")}>
+                      {submitted ? "View →" : "Fill →"}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         </div>
 
-        {/* Right column */}
+        {/* Right sidebar */}
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           {/* Profile strength */}
-          <div className="card fade-up-3">
+          <div className="card fade-up-2">
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
               <h3 style={{ fontSize: 15, fontWeight: 700, color: "#F0EBE0" }}>Profile Strength</h3>
               <span style={{ fontSize: 14, fontWeight: 700, color: score >= 80 ? "#4AE08A" : score >= 50 ? "#C9A84C" : "#FF8A80" }}>{score}%</span>
@@ -1105,40 +1190,30 @@ function SeekerDashboard({ setActivePage }) {
           </div>
 
           {/* Quick actions */}
-          <div className="card fade-up-4">
+          <div className="card fade-up-3">
             <h3 style={{ fontSize: 15, fontWeight: 700, color: "#F0EBE0", marginBottom: 14 }}>Quick Actions</h3>
-            {[["⊡", "Generate Cover Letter", "coverletter"], ["◉", "Practice Interview", "interview"], ["◐", "My Journey", "journey"], ["◑", "Market Insights", "insights"]].map(([icon, label, page]) => (
+            {[
+              ["◉", "My Checkpoints", "checkpoints"],
+              ["≡", "My Attendance", "attendance"],
+              ["◈", "My Assessments", "assessments"],
+              ["◐", "My Journey", "journey"],
+              ["◆", "Announcements", "announcements"],
+            ].map(([icon, label, page]) => (
               <button key={page} className="btn-ghost" style={{ width: "100%", justifyContent: "flex-start", marginBottom: 4, fontSize: 13 }} onClick={() => setActivePage(page)}>
                 <span>{icon}</span>{label}
               </button>
             ))}
           </div>
-        </div>
-      </div>
 
-      {/* Assessments */}
-      <div className="card fade-up" style={{ marginTop: 20 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-          <h3 style={{ fontSize: 15, fontWeight: 700, color: "#F0EBE0" }}>◈ My Assessments</h3>
-          <button className="btn-ghost" style={{ fontSize: 13 }} onClick={() => setActivePage("assessments")}>Go to Assessments →</button>
-        </div>
-        <div style={{ display: "flex", flexDirection: "column" }}>
-          {[
-            { id: "mentee_first_meeting", title: "First Meeting Feedback", color: "#27AE60" },
-            { id: "mentee_mid_program", title: "Mid-Program Assessment", color: "#C9A84C" },
-            { id: "mentee_final", title: "Final Program Assessment", color: "#8E44AD" },
-          ].map((form, i, arr) => {
-            const submitted = assessments.find(a => a.form_type === form.id);
-            return (
-              <div key={form.id} style={{ display: "flex", alignItems: "center", gap: 14, padding: "12px 0", borderBottom: i < arr.length - 1 ? "1px solid rgba(255,255,255,0.06)" : "none" }}>
-                <div style={{ width: 10, height: 10, borderRadius: "50%", background: submitted ? "#4AE08A" : "#2A3A52", border: submitted ? "none" : "1px solid #3A4A62", flexShrink: 0 }} />
-                <div style={{ flex: 1, fontSize: 14, color: submitted ? "#F0EBE0" : "#8A9BB5" }}>{form.title}</div>
-                <button className={submitted ? "btn-ghost" : "btn-primary"} style={{ fontSize: 12, padding: "5px 14px" }} onClick={() => setActivePage("assessments")}>
-                  {submitted ? "View →" : "Fill →"}
-                </button>
-              </div>
-            );
-          })}
+          {/* Attendance summary */}
+          <div className="card fade-up-4">
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+              <h3 style={{ fontSize: 15, fontWeight: 700, color: "#F0EBE0" }}>Attendance</h3>
+              <button className="btn-ghost" style={{ fontSize: 12 }} onClick={() => setActivePage("attendance")}>View →</button>
+            </div>
+            <div style={{ fontSize: 36, fontWeight: 800, color: "#C9A84C", marginBottom: 4 }}>{loading ? "—" : attendanceCount}</div>
+            <div style={{ fontSize: 13, color: "#8A9BB5" }}>sessions logged</div>
+          </div>
         </div>
       </div>
     </div>
