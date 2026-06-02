@@ -879,7 +879,7 @@ function AuthScreen({ onAuth }) {
                 <div>
                   <label className="lbl">I am a</label>
                   <div style={{ display: "flex", gap: 10 }}>
-                    {[["seeker", "Job Seeker"], ["employer", "Employer"]].map(([v, label]) => (
+                    {[["seeker", "Participant"], ["employer", "Employer"]].map(([v, label]) => (
                       <button key={v} onClick={() => setRole(v)}
                         style={{ flex: 1, padding: "10px 8px", borderRadius: 10, border: `1px solid ${role === v ? "rgba(201,168,76,0.6)" : "rgba(255,255,255,0.08)"}`, background: role === v ? "rgba(201,168,76,0.1)" : "rgba(255,255,255,0.02)", color: role === v ? "#C9A84C" : "#8A9BB5", fontSize: 13, fontWeight: role === v ? 600 : 400, cursor: "pointer", transition: "all .15s" }}>
                         {label}
