@@ -5993,6 +5993,150 @@ function InjazAssessmentsView() {
 }
 
 
+function InjazReflectionCards() {
+  const [reflections, setReflections] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+  const [expanded, setExpanded] = useState(null);
+
+  useEffect(() => {
+    db.getAllReflections().then(setReflections).catch(() => {}).finally(() => setLoading(false));
+  }, []);
+
+  const filtered = reflections.filter(r => {
+    const name = (r.job_seekers?.full_name || "").toLowerCase();
+    const mentor = (r.mentor_name || "").toLowerCase();
+    const q = search.toLowerCase();
+    return !q || name.includes(q) || mentor.includes(q);
+  });
+
+  const avgRating = reflections.length
+    ? (reflections.filter(r => r.rating).reduce((s, r) => s + r.rating, 0) /
+       (reflections.filter(r => r.rating).length || 1)).toFixed(1)
+    : "—";
+  const participants = new Set(reflections.map(r => r.seeker_id)).size;
+
+  return (
+    <div>
+      <div style={{ marginBottom: 28 }}>
+        <h1 style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 24, fontWeight: 700, color: "#F0EBE0", marginBottom: 4 }}>Reflection Cards</h1>
+        <p style={{ fontSize: 13, color: "#8A9BB5" }}>{reflections.length} cards submitted across {participants} participant{participants !== 1 ? "s" : ""}</p>
+      </div>
+
+      {/* Stats */}
+      <div className="grid-4" style={{ marginBottom: 24 }}>
+        {[
+          { label: "Total Cards", value: reflections.length, color: "#8E44AD", icon: "◉" },
+          { label: "Participants", value: participants, color: "#2980B9", icon: "◈" },
+          { label: "Avg Rating", value: avgRating === "—" ? "—" : `${avgRating} ★`, color: "#C9A84C", icon: "★" },
+          { label: "With Action Steps", value: reflections.filter(r => r.action_steps?.some(Boolean)).length, color: "#27AE60", icon: "◆" },
+        ].map(s => (
+          <div key={s.label} className="card" style={{ padding: 20 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
+              <span style={{ fontSize: 18, color: s.color }}>{s.icon}</span>
+              <div style={{ width: 6, height: 6, borderRadius: "50%", background: s.color, boxShadow: `0 0 6px ${s.color}` }} />
+            </div>
+            <div style={{ fontSize: 28, fontWeight: 700, color: "#F0EBE0", marginBottom: 4 }}>{s.value}</div>
+            <div style={{ fontSize: 12, color: "#8A9BB5" }}>{s.label}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Search */}
+      <div className="card" style={{ padding: "14px 18px", marginBottom: 20 }}>
+        <input
+          className="input-field"
+          placeholder="Search by participant or mentor name..."
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          style={{ margin: 0 }}
+        />
+      </div>
+
+      {loading ? <div style={{ display: "flex", justifyContent: "center", padding: 60 }}><Spinner size={36} /></div>
+        : filtered.length === 0 ? (
+          <div className="card" style={{ textAlign: "center", padding: 60, color: "#4A5A72" }}>
+            <div style={{ fontSize: 36, marginBottom: 12, opacity: .3 }}>◉</div>
+            <div>{search ? "No cards match your search." : "No reflection cards submitted yet."}</div>
+          </div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {filtered.map((r, idx) => {
+              const isExpanded = expanded === r.id;
+              const participantName = r.job_seekers?.full_name || "Unknown Participant";
+              return (
+                <div key={r.id} className="card" style={{ padding: 0, overflow: "hidden", border: isExpanded ? "1px solid rgba(142,68,173,0.4)" : "1px solid rgba(201,168,76,0.12)" }}>
+                  {/* Row header */}
+                  <div style={{ padding: "18px 24px", display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer" }} onClick={() => setExpanded(isExpanded ? null : r.id)}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                      <span style={{ fontSize: 11, background: "rgba(142,68,173,0.15)", color: "#C39BD3", border: "1px solid rgba(142,68,173,0.3)", borderRadius: 20, padding: "3px 12px", fontWeight: 600, whiteSpace: "nowrap" }}>
+                        Session #{r.session_number || idx + 1}
+                      </span>
+                      <div>
+                        <div style={{ fontWeight: 600, color: "#F0EBE0", fontSize: 14 }}>{participantName}</div>
+                        {r.mentor_name && <div style={{ fontSize: 12, color: "#4A5A72" }}>Mentor: {r.mentor_name}</div>}
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                      {r.rating && (
+                        <div style={{ display: "flex", gap: 2 }}>
+                          {[1,2,3,4,5].map(s => (
+                            <span key={s} style={{ fontSize: 14, color: s <= r.rating ? "#C9A84C" : "rgba(255,255,255,0.15)" }}>★</span>
+                          ))}
+                        </div>
+                      )}
+                      <span style={{ fontSize: 12, color: "#4A5A72", whiteSpace: "nowrap" }}>
+                        {r.session_date ? new Date(r.session_date).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "—"}
+                      </span>
+                      <span style={{ color: "#C9A84C", fontSize: 16 }}>{isExpanded ? "▲" : "▼"}</span>
+                    </div>
+                  </div>
+
+                  {/* Expanded detail */}
+                  {isExpanded && (
+                    <div style={{ padding: "0 24px 24px", borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+                      <div style={{ marginTop: 20, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
+                        {r.takeaways?.some(Boolean) && (
+                          <div>
+                            <div style={{ fontSize: 11, color: "#C9A84C", letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 10 }}>◆ Key Takeaways</div>
+                            {r.takeaways.map((t, i) => t && (
+                              <div key={i} style={{ display: "flex", gap: 8, marginBottom: 8, fontSize: 13, color: "#F0EBE0" }}>
+                                <span style={{ color: "#C9A84C", flexShrink: 0, fontWeight: 700 }}>→</span>
+                                <span style={{ lineHeight: 1.6 }}>{t}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        {r.action_steps?.some(Boolean) && (
+                          <div>
+                            <div style={{ fontSize: 11, color: "#2980B9", letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 10 }}>◈ Action Steps</div>
+                            {r.action_steps.map((s, i) => s && (
+                              <div key={i} style={{ display: "flex", gap: 8, marginBottom: 8, fontSize: 13, color: "#F0EBE0" }}>
+                                <span style={{ color: "#2980B9", flexShrink: 0, fontWeight: 700 }}>{i + 1}.</span>
+                                <span style={{ lineHeight: 1.6 }}>{s}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      {r.personal_reflection && (
+                        <div style={{ marginTop: 16, padding: 16, background: "rgba(142,68,173,0.08)", border: "1px solid rgba(142,68,173,0.15)", borderRadius: 10 }}>
+                          <div style={{ fontSize: 11, color: "#8E44AD", letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 8 }}>◐ Personal Reflection</div>
+                          <div style={{ fontSize: 13, color: "#8A9BB5", lineHeight: 1.7 }}>→ {r.personal_reflection}</div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+    </div>
+  );
+}
+
+
 // ══════════════════════════════════════════════════════════════
 //  ANNOUNCEMENTS & NOTIFICATIONS
 // ══════════════════════════════════════════════════════════════
@@ -6726,6 +6870,7 @@ export default function App() {
       { id: "attendance", icon: "≡", label: "Attendance" },
       { id: "announcements", icon: "◆", label: "Announcements" },
       { id: "assessments", icon: "◈", label: "Assessments" },
+      { id: "reflections", icon: "◉", label: "Reflection Cards" },
       { id: "invites", icon: "⊕", label: "User Access" },
       { id: "profile", icon: "◎", label: "My Profile" },
     ];
@@ -6740,6 +6885,7 @@ export default function App() {
       attendance: <AttendanceVerification isInjazTeam={true} />,
       announcements: <ComposeAnnouncements senderRole="injaz" />,
       assessments: <InjazAssessmentsView />,
+      reflections: <InjazReflectionCards />,
       invites: <InviteManagement />,
       profile: <InjazProfile />,
     };
